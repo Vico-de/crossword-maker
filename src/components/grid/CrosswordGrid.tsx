@@ -29,6 +29,13 @@ interface CellProps {
     onChange: (changes: Partial<CellType>) => void;
 }
 
+const directionSymbol: Record<DefinitionDirection, string> = {
+    up: '↑',
+    down: '↓',
+    left: '←',
+    right: '→'
+};
+
 const CrosswordCell: React.FC<CellProps> = ({
     value,
     isBlack,
