@@ -3,15 +3,31 @@ import { useCrossword } from '../../context/CrosswordContext';
 import type { Grid, SavedGrid } from '../../models/types';
 import './Toolbar.css';
 
+export interface AppearanceSettings {
+    blackCellColor: string;
+    arrowColor: string;
+    letterColor: string;
+    gridFont: string;
+    definitionFont: string;
+}
+
 interface ToolbarProps {
     onResize: (width: number, height: number) => void;
     currentGrid?: Grid;
     onInputFocus: (isFocused: boolean) => void;
+    appearance: AppearanceSettings;
+    onAppearanceChange: (changes: Partial<AppearanceSettings>) => void;
 }
 
-export const Toolbar: React.FC<ToolbarProps> = ({ onResize, currentGrid, onInputFocus }) => {
+export const Toolbar: React.FC<ToolbarProps> = ({
+    onResize,
+    currentGrid,
+    onInputFocus,
+    appearance,
+    onAppearanceChange
+}) => {
     const { dispatch } = useCrossword();
-    const [activePanel, setActivePanel] = useState<'info' | 'resize' | null>(null);
+    const [activePanel, setActivePanel] = useState<'info' | 'resize' | 'appearance' | null>(null);
     const [gridName, setGridName] = useState(currentGrid?.name || '');
     const [showLoadDropdown, setShowLoadDropdown] = useState(false);
     const [dimensions, setDimensions] = useState({
@@ -67,16 +83,34 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onResize, currentGrid, onInput
         setActivePanel(null);
     };
 
+    const colorFields: { key: keyof AppearanceSettings; label: string }[] = [
+        { key: 'blackCellColor', label: 'Couleur des cases noires' },
+        { key: 'arrowColor', label: 'Couleur des flèches' },
+        { key: 'letterColor', label: 'Couleur des lettres' }
+    ];
+
+    const handleAppearanceFieldChange = (key: keyof AppearanceSettings, value: string) => {
+        onAppearanceChange({ [key]: value });
+    };
+
     return (
         <div className="toolbar-container">
             <div className="toolbar-buttons">
-                {['info', 'resize'].map((panel) => (
+                {['info', 'resize', 'appearance'].map((panel) => (
                     <button
                         key={panel}
                         className={`tool-button ${activePanel === panel ? 'active' : ''}`}
-                        onClick={() => setActivePanel(activePanel === panel ? null : panel as 'info' | 'resize')}
+                        onClick={() =>
+                            setActivePanel(
+                                activePanel === panel ? null : (panel as 'info' | 'resize' | 'appearance')
+                            )
+                        }
                     >
-                        {panel === 'info' ? 'Infos' : 'Redimensionner'}
+                        {panel === 'info'
+                            ? 'Infos'
+                            : panel === 'resize'
+                              ? 'Redimensionner'
+                              : 'Apparence'}
                     </button>
                 ))}
             </div>
@@ -166,6 +200,63 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onResize, currentGrid, onInput
                         <button className="action-button" onClick={handleResize}>
                             Appliquer
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {activePanel === 'appearance' && (
+                <div className="tool-content">
+                    <div className="tool-panel appearance-panel">
+                        {colorFields.map(({ key, label }) => (
+                            <div key={key} className="color-field">
+                                <label>{label}</label>
+                                <div className="color-inputs">
+                                    <input
+                                        type="color"
+                                        value={appearance[key]}
+                                        onChange={(e) => handleAppearanceFieldChange(key, e.target.value)}
+                                        onFocus={() => onInputFocus(true)}
+                                        onBlur={() => onInputFocus(false)}
+                                        aria-label={label}
+                                    />
+                                    <input
+                                        type="text"
+                                        value={appearance[key]}
+                                        onChange={(e) => handleAppearanceFieldChange(key, e.target.value)}
+                                        onFocus={() => onInputFocus(true)}
+                                        onBlur={() => onInputFocus(false)}
+                                        className="color-text-input"
+                                        placeholder="#000000 ou rgb()"
+                                    />
+                                </div>
+                            </div>
+                        ))}
+
+                        <div className="font-field">
+                            <label>Police de la grille</label>
+                            <input
+                                type="text"
+                                value={appearance.gridFont}
+                                onChange={(e) => handleAppearanceFieldChange('gridFont', e.target.value)}
+                                onFocus={() => onInputFocus(true)}
+                                onBlur={() => onInputFocus(false)}
+                                className="color-text-input"
+                                placeholder="Ex: Inter, Arial, sans-serif"
+                            />
+                        </div>
+
+                        <div className="font-field">
+                            <label>Police des définitions</label>
+                            <input
+                                type="text"
+                                value={appearance.definitionFont}
+                                onChange={(e) => handleAppearanceFieldChange('definitionFont', e.target.value)}
+                                onFocus={() => onInputFocus(true)}
+                                onBlur={() => onInputFocus(false)}
+                                className="color-text-input"
+                                placeholder="Ex: Inter, Georgia"
+                            />
+                        </div>
                     </div>
                 </div>
             )}
