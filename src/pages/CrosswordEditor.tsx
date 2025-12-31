@@ -1,58 +1,283 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CrosswordGrid } from '../components/grid/CrosswordGrid';
-import { Toolbar } from '../components/toolbar/Toolbar';
+import { Toolbar, type AppearanceSettings } from '../components/toolbar/Toolbar';
 import { useCrossword } from '../context/CrosswordContext';
-import type { Cell } from '../models/types';
+import type { Cell, Grid, GridSet, SavedGrid } from '../models/types';
+import './CrosswordEditor.css';
 
 // Supprimez l'import de SaveManager et SavedGrid s'ils existent
 
 // Ajoutez cette fonction helper avant le composant CrosswordEditor
-const extractWords = (cells: Cell[][]) => {
-    const words = new Set<string>();
-    
+type WordDirection = 'horizontal' | 'vertical';
+
+interface WordPosition {
+    word: string;
+    direction: WordDirection;
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+    cells: { x: number; y: number }[];
+}
+
+const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
+    const positions: WordPosition[] = [];
+
     // Extraction des mots horizontaux
     for (let y = 0; y < cells.length; y++) {
         let currentWord = '';
+        let startX = 0;
+        const currentCells: { x: number; y: number }[] = [];
+
         for (let x = 0; x < cells[0].length; x++) {
             if (!cells[y][x].isBlack && cells[y][x].value) {
+                if (currentWord.length === 0) startX = x;
                 currentWord += cells[y][x].value;
+                currentCells.push({ x, y });
             } else if (currentWord.length > 1) {
-                words.add(currentWord);
+                positions.push({
+                    word: currentWord,
+                    direction: 'horizontal',
+                    start: { x: startX, y },
+                    end: { x: x - 1, y },
+                    cells: [...currentCells]
+                });
                 currentWord = '';
+                currentCells.length = 0;
             } else {
                 currentWord = '';
+                currentCells.length = 0;
             }
         }
         if (currentWord.length > 1) {
-            words.add(currentWord);
+            positions.push({
+                word: currentWord,
+                direction: 'horizontal',
+                start: { x: startX, y },
+                end: { x: cells[0].length - 1, y },
+                cells: [...currentCells]
+            });
         }
     }
 
     // Extraction des mots verticaux
     for (let x = 0; x < cells[0].length; x++) {
         let currentWord = '';
+        let startY = 0;
+        const currentCells: { x: number; y: number }[] = [];
+
         for (let y = 0; y < cells.length; y++) {
             if (!cells[y][x].isBlack && cells[y][x].value) {
+                if (currentWord.length === 0) startY = y;
                 currentWord += cells[y][x].value;
+                currentCells.push({ x, y });
             } else if (currentWord.length > 1) {
-                words.add(currentWord);
+                positions.push({
+                    word: currentWord,
+                    direction: 'vertical',
+                    start: { x, y: startY },
+                    end: { x, y: y - 1 },
+                    cells: [...currentCells]
+                });
                 currentWord = '';
+                currentCells.length = 0;
             } else {
                 currentWord = '';
+                currentCells.length = 0;
             }
         }
         if (currentWord.length > 1) {
-            words.add(currentWord);
+            positions.push({
+                word: currentWord,
+                direction: 'vertical',
+                start: { x, y: startY },
+                end: { x, y: cells.length - 1 },
+                cells: [...currentCells]
+            });
         }
     }
 
-    return Array.from(words).sort();
+    return positions;
+};
+
+const buildEmptyGrid = (width: number, height: number) => {
+    return {
+        name: '',
+        size: { width, height },
+        cells: Array(height)
+            .fill(null)
+            .map((_, y) =>
+                Array(width)
+                    .fill(null)
+                    .map((__, x) => ({ value: '', isBlack: false, x, y, isHighlighted: false }))
+            ),
+        words: [],
+        status: 'initial' as const
+    };
 };
 
 export const CrosswordEditor: React.FC = () => {
     const { state, dispatch } = useCrossword();
     const [isToolbarInputActive, setIsToolbarInputActive] = useState(false);
-    // Supprimez la ligne avec setIsSaveDialogOpen si elle existe
+    const gridAreaRef = React.useRef<HTMLDivElement | null>(null);
+    const [selectedWord, setSelectedWord] = useState<string | null>(null);
+    const [wordDefinitions, setWordDefinitions] = useState<Record<string, {
+        definition: string;
+        placement?: {
+            x: number;
+            y: number;
+            direction: 'up' | 'down' | 'left' | 'right';
+            anchor: { x: number; y: number };
+            anchorRole: 'start' | 'end';
+            wordDirection: WordDirection;
+        };
+    }>>({});
+    const [placementTargetWord, setPlacementTargetWord] = useState<string | null>(null);
+    const [appearance, setAppearance] = useState<AppearanceSettings>({
+        blackCellColor: '#000000',
+        arrowColor: '#7a7a7a',
+        letterColor: '#000000',
+        definitionTextColor: '#f5f5f5',
+        borderColor: '#cccccc',
+        separatorColor: '#ffffff',
+        gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
+        definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
+    });
+    const initialSets: GridSet[] = useMemo(() => {
+        const storedSets = localStorage.getItem('gridSets');
+        if (storedSets) return JSON.parse(storedSets);
+
+        const legacyGrids = localStorage.getItem('savedGrids');
+        if (legacyGrids) {
+            const grids: SavedGrid[] = JSON.parse(legacyGrids);
+            if (grids.length > 0) {
+                return [{ id: 'legacy', name: 'Set local', grids }];
+            }
+        }
+        return [];
+    }, []);
+    const storedSetId = useMemo(() => localStorage.getItem('currentSetId'), []);
+    const defaultSetId = storedSetId && initialSets.some((set) => set.id === storedSetId)
+        ? storedSetId
+        : initialSets[0]?.id || null;
+    const [gridSets, setGridSets] = useState<GridSet[]>(initialSets);
+    const [currentSetId, setCurrentSetId] = useState<string | null>(defaultSetId);
+    const [currentSetName, setCurrentSetName] = useState<string>(
+        initialSets.find((set) => set.id === defaultSetId)?.name || 'Nouveau set'
+    );
+    const [savedGrids, setSavedGrids] = useState<SavedGrid[]>(
+        initialSets.find((set) => set.id === defaultSetId)?.grids || []
+    );
+    const [showSetDialog, setShowSetDialog] = useState(true);
+    const [newSetName, setNewSetName] = useState('Nouveau set');
+
+    const wordPositions = useMemo(() => {
+        if (!state.currentGrid) return [];
+        return extractWordPositions(state.currentGrid.cells);
+    }, [state.currentGrid]);
+
+    const appearanceVars = useMemo(
+        () => ({
+            ['--grid-black-color' as string]: appearance.blackCellColor,
+            ['--grid-arrow-color' as string]: appearance.arrowColor,
+            ['--grid-letter-color' as string]: appearance.letterColor,
+            ['--grid-definition-color' as string]: appearance.definitionTextColor,
+            ['--grid-border-color' as string]: appearance.borderColor,
+            ['--definition-separator-color' as string]: appearance.separatorColor,
+            ['--grid-font-family' as string]: appearance.gridFont,
+            ['--definition-font-family' as string]: appearance.definitionFont,
+            ['--ui-font-family' as string]: appearance.gridFont
+        }),
+        [appearance]
+    );
+
+    useEffect(() => {
+        localStorage.setItem('gridSets', JSON.stringify(gridSets));
+        if (currentSetId) {
+            localStorage.setItem('currentSetId', currentSetId);
+        } else {
+            localStorage.removeItem('currentSetId');
+        }
+    }, [gridSets, currentSetId]);
+
+    useEffect(() => {
+        const current = gridSets.find((set) => set.id === currentSetId);
+        if (current) {
+            setSavedGrids(current.grids);
+            setCurrentSetName(current.name);
+        }
+    }, [gridSets, currentSetId]);
+
+    const resetEditingState = useCallback(() => {
+        const size = state.currentGrid?.size || { width: 15, height: 15 };
+        setWordDefinitions({});
+        setSelectedWord(null);
+        setPlacementTargetWord(null);
+        dispatch({ type: 'LOAD_GRID', payload: buildEmptyGrid(size.width, size.height) });
+    }, [dispatch, state.currentGrid]);
+
+    const handleSavedGridsChange = useCallback((grids: SavedGrid[]) => {
+        setSavedGrids(grids);
+        if (currentSetId) {
+            setGridSets((prev) => prev.map((set) => (set.id === currentSetId ? { ...set, grids } : set)));
+        } else {
+            const id = Date.now().toString();
+            const name = currentSetName || 'Nouveau set';
+            const newSet: GridSet = { id, name, grids };
+            setGridSets([newSet]);
+            setCurrentSetId(id);
+            setCurrentSetName(name);
+        }
+    }, [currentSetId, currentSetName]);
+
+    const handleSetNameChange = useCallback((name: string) => {
+        setCurrentSetName(name);
+        if (!currentSetId) return;
+        setGridSets((prev) => prev.map((set) => (set.id === currentSetId ? { ...set, name } : set)));
+    }, [currentSetId]);
+
+    const handleSelectSet = useCallback((id: string) => {
+        const target = gridSets.find((set) => set.id === id);
+        if (!target) return;
+        setCurrentSetId(id);
+        setCurrentSetName(target.name);
+        setSavedGrids(target.grids);
+        resetEditingState();
+        setShowSetDialog(false);
+    }, [gridSets, resetEditingState]);
+
+    const handleCreateNewSet = useCallback((nameOverride?: string) => {
+        const name = (nameOverride ?? newSetName).trim() || 'Nouveau set';
+        const id = Date.now().toString();
+        const newSet: GridSet = { id, name, grids: [] };
+        setGridSets((prev) => [...prev, newSet]);
+        setCurrentSetId(id);
+        setCurrentSetName(name);
+        setSavedGrids([]);
+        resetEditingState();
+        setShowSetDialog(false);
+    }, [newSetName, resetEditingState]);
+
+    const handleExportSet = useCallback(() => {
+        if (!currentSetId) {
+            window.alert('Créez ou chargez un set avant d\'exporter.');
+            return;
+        }
+        const exportName = (currentSetName || 'set-sans-nom').trim();
+        const payload = { name: exportName, grids: savedGrids };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${exportName.replace(/\s+/g, '_').toLowerCase() || 'set'}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+    }, [currentSetId, currentSetName, savedGrids]);
+
+    const handleGridLoad = useCallback((grid: Grid) => {
+        setSelectedWord(null);
+        setPlacementTargetWord(null);
+        setWordDefinitions({});
+        dispatch({ type: 'LOAD_GRID', payload: grid });
+    }, [dispatch]);
     
     const handleCellUpdate = useCallback((x: number, y: number, changes: Partial<Cell>) => {
         if (!state.currentGrid?.cells[y]?.[x]) return;
@@ -74,65 +299,50 @@ export const CrosswordEditor: React.FC = () => {
         });
     }, [state.currentGrid, dispatch]);
 
-    // Déplacez la déclaration de moveToNextCell avant son utilisation
-    const moveToPreviousCell = (): boolean => {
+    const moveSelection = (deltaX: number, deltaY: number, allowBlackSelection = false): boolean => {
         if (!state.selectedCell || !state.currentGrid) return false;
         const { x, y } = state.selectedCell;
         const { cells } = state.currentGrid;
-        
-        if (state.selectedDirection === 'horizontal') {
-            let newX = x;
-            while (newX > 0) {
-                newX--;
-                if (!cells[y][newX].isBlack) {
-                    dispatch({ type: 'SELECT_CELL', payload: { x: newX, y } });
-                    return true;
-                }
-            }
-        } else {
-            let newY = y;
-            while (newY > 0) {
-                newY--;
-                if (!cells[newY][x].isBlack) {
-                    dispatch({ type: 'SELECT_CELL', payload: { x, y: newY } });
-                    return true;
-                }
-            }
+        const targetX = x + deltaX;
+        const targetY = y + deltaY;
+
+        if (
+            targetX < 0 ||
+            targetY < 0 ||
+            targetY >= cells.length ||
+            targetX >= cells[0].length
+        ) {
+            return false;
         }
-        return false;
+
+        const targetCell = cells[targetY][targetX];
+
+        if (!allowBlackSelection && targetCell.isBlack) {
+            return false;
+        }
+
+        dispatch({ type: 'SELECT_CELL', payload: { x: targetX, y: targetY } });
+        return true;
+    };
+
+    const moveToPreviousCell = (): boolean => {
+        if (state.selectedDirection === 'horizontal') {
+            return moveSelection(-1, 0);
+        }
+        return moveSelection(0, -1);
     };
 
     const moveToNextCell = (): boolean => {
-        if (!state.selectedCell || !state.currentGrid) return false;
-        const { x, y } = state.selectedCell;
-        const { cells } = state.currentGrid;
-        
         if (state.selectedDirection === 'horizontal') {
-            let newX = x;
-            while (newX < cells[0].length - 1) {
-                newX++;
-                if (!cells[y][newX].isBlack) {
-                    dispatch({ type: 'SELECT_CELL', payload: { x: newX, y } });
-                    return true;
-                }
-            }
-        } else {
-            let newY = y;
-            while (newY < cells.length - 1) {
-                newY++;
-                if (!cells[newY][x].isBlack) {
-                    dispatch({ type: 'SELECT_CELL', payload: { x, y: newY } });
-                    return true;
-                }
-            }
+            return moveSelection(1, 0);
         }
-        return false;
+        return moveSelection(0, 1);
     };
 
     // Modifiez le handleKeyDown pour vérifier si le dialog est ouvert
     const handleKeyDown = useCallback((event: KeyboardEvent) => {
-        // Si un input dans la toolbar est actif, on ne gère pas les touches
-        if (isToolbarInputActive) return;
+        // Si un input dans la toolbar est actif ou qu'aucun set n'est choisi, on ne gère pas les touches
+        if (isToolbarInputActive || showSetDialog) return;
 
         if (!state.selectedCell || !state.currentGrid) return;
 
@@ -191,27 +401,19 @@ export const CrosswordEditor: React.FC = () => {
         switch (event.key) {
             case 'ArrowLeft':
                 event.preventDefault();
-                if (state.selectedDirection === 'horizontal') {
-                    moveToPreviousCell();
-                }
+                moveSelection(-1, 0, true);
                 break;
             case 'ArrowRight':
                 event.preventDefault();
-                if (state.selectedDirection === 'horizontal') {
-                    moveToNextCell();
-                }
+                moveSelection(1, 0, true);
                 break;
             case 'ArrowUp':
                 event.preventDefault();
-                if (state.selectedDirection === 'vertical') {
-                    moveToPreviousCell();
-                }
+                moveSelection(0, -1, true);
                 break;
             case 'ArrowDown':
                 event.preventDefault();
-                if (state.selectedDirection === 'vertical') {
-                    moveToNextCell();
-                }
+                moveSelection(0, 1, true);
                 break;
             default:
                 // Gestion des lettres
@@ -221,7 +423,7 @@ export const CrosswordEditor: React.FC = () => {
                     moveToNextCell();
                 }
         }
-    }, [state.selectedCell, state.currentGrid, state.selectedDirection, handleCellUpdate, dispatch, isToolbarInputActive]);
+    }, [state.selectedCell, state.currentGrid, state.selectedDirection, handleCellUpdate, dispatch, isToolbarInputActive, showSetDialog]);
 
     React.useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);
@@ -231,11 +433,20 @@ export const CrosswordEditor: React.FC = () => {
     }, [handleKeyDown]);
 
     const handleCellClick = (x: number, y: number) => {
-        dispatch({ type: 'SELECT_CELL', payload: { x, y } });
+        const isSameCell = state.selectedCell?.x === x && state.selectedCell?.y === y;
+        dispatch({ type: 'SELECT_CELL', payload: isSameCell ? null : { x, y } });
+
+        if (placementTargetWord) {
+            attemptDefinitionPlacement(placementTargetWord, x, y);
+        }
     };
 
     const handleResize = (width: number, height: number) => {
         dispatch({ type: 'RESIZE_GRID', payload: { width, height } });
+    };
+
+    const handleAppearanceChange = (changes: Partial<AppearanceSettings>) => {
+        setAppearance((prev) => ({ ...prev, ...changes }));
     };
 
     const toggleDirection = () => {
@@ -245,41 +456,351 @@ export const CrosswordEditor: React.FC = () => {
         });
     };
 
-    // Ajoutez ce hook useMemo avant le return
-    const wordsList = useMemo(() => {
-        if (!state.currentGrid) return [];
-        return extractWords(state.currentGrid.cells);
-    }, [state.currentGrid]);
+    const isAdjacentTo = (cell: { x: number; y: number }, target: { x: number; y: number }) => {
+        return Math.abs(cell.x - target.x) + Math.abs(cell.y - target.y) === 1;
+    };
+
+    React.useEffect(() => {
+        if (!state.currentGrid) return;
+
+        setWordDefinitions((prev) => {
+            let hasChanges = false;
+            const next = { ...prev };
+
+            Object.entries(prev).forEach(([word, data]) => {
+                const wordPosition = wordPositions.find((pos) => pos.word === word);
+
+                if (!wordPosition) {
+                    delete next[word];
+                    hasChanges = true;
+                    return;
+                }
+
+                if (data.placement) {
+                    const cell = state.currentGrid!.cells[data.placement.y]?.[data.placement.x];
+                    const stillBlack = cell?.isBlack;
+                    const touchesStart = isAdjacentTo({ x: data.placement.x, y: data.placement.y }, wordPosition.start);
+                    const touchesEnd = isAdjacentTo({ x: data.placement.x, y: data.placement.y }, wordPosition.end);
+
+                    const anchorMatches =
+                        data.placement.anchorRole === 'start'
+                            ? touchesStart &&
+                              data.placement.anchor.x === wordPosition.start.x &&
+                              data.placement.anchor.y === wordPosition.start.y
+                            : touchesEnd &&
+                              data.placement.anchor.x === wordPosition.end.x &&
+                              data.placement.anchor.y === wordPosition.end.y;
+
+                    if (!stillBlack || !anchorMatches) {
+                        next[word] = { ...data, placement: undefined };
+                        hasChanges = true;
+                    }
+                }
+            });
+
+            return hasChanges ? next : prev;
+        });
+    }, [state.currentGrid, wordPositions]);
+
+    const attemptDefinitionPlacement = useCallback((word: string, x: number, y: number) => {
+        if (!state.currentGrid) return;
+
+        const cell = state.currentGrid.cells[y][x];
+        if (!cell.isBlack) {
+            setPlacementTargetWord(null);
+            return;
+        }
+
+        const placementsAtCell = Object.entries(wordDefinitions).filter(([, data]) =>
+            data.placement && data.placement.x === x && data.placement.y === y
+        );
+
+        const alreadyPlacedHere = placementsAtCell.some(([placedWord]) => placedWord === word);
+        if (placementsAtCell.length >= 2 && !alreadyPlacedHere) {
+            setPlacementTargetWord(null);
+            return;
+        }
+
+        const candidate = wordPositions.find((position) => {
+            const touchesStart = isAdjacentTo({ x, y }, position.start);
+            const touchesEnd = isAdjacentTo({ x, y }, position.end);
+            return position.word === word && (touchesStart || touchesEnd);
+        });
+
+        if (!candidate) {
+            setPlacementTargetWord(null);
+            return;
+        }
+
+        const isStart = isAdjacentTo({ x, y }, candidate.start);
+        const anchor = isStart ? candidate.start : candidate.end;
+        const direction: 'up' | 'down' | 'left' | 'right' =
+            anchor.x > x ? 'right' : anchor.x < x ? 'left' : anchor.y > y ? 'down' : 'up';
+
+        setWordDefinitions((prev) => ({
+            ...prev,
+            [word]: {
+                definition: prev[word]?.definition || '',
+                placement: { x, y, direction, anchor, anchorRole: isStart ? 'start' : 'end', wordDirection: candidate.direction }
+            }
+        }));
+        setSelectedWord(word);
+        setPlacementTargetWord(null);
+    }, [state.currentGrid, wordDefinitions, wordPositions]);
+
+    const handleWordSelect = (word: string) => {
+        setSelectedWord(word);
+        setPlacementTargetWord(null);
+    };
+
+    const handleDefinitionChange = (value: string) => {
+        if (!selectedWord) return;
+        setWordDefinitions((prev) => ({
+            ...prev,
+            [selectedWord]: {
+                ...prev[selectedWord],
+                definition: value
+            }
+        }));
+    };
+
+    const handlePlacementRequest = () => {
+        if (!selectedWord) return;
+        setPlacementTargetWord(selectedWord);
+    };
+
+    const handleOutsideClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        if (gridAreaRef.current && !gridAreaRef.current.contains(event.target as Node)) {
+            dispatch({ type: 'SELECT_CELL', payload: null });
+            setPlacementTargetWord(null);
+        }
+    };
+
+    const handleDirectionUpdate = (direction: 'up' | 'down' | 'left' | 'right') => {
+        if (!selectedWord) return;
+        setWordDefinitions((prev) => {
+            const current = prev[selectedWord];
+            if (!current?.placement) return prev;
+            return {
+                ...prev,
+                [selectedWord]: {
+                    ...current,
+                    placement: { ...current.placement, direction }
+                }
+            };
+        });
+    };
+
+    const { 
+        wordsList,
+        highlightedCells,
+        definitionPlacements,
+        arrowPlacements
+    } = useMemo(() => {
+        const words = new Set<string>();
+        wordPositions.forEach((position) => words.add(position.word));
+
+        let highlighted = new Set<string>();
+        if (selectedWord) {
+            const occurrence = wordPositions.find((pos) => pos.word === selectedWord);
+            if (occurrence) {
+                highlighted = new Set(occurrence.cells.map((cell) => `${cell.x}-${cell.y}`));
+            }
+        }
+
+        const placements: Record<string, { word: string; definition?: string }[]> = {};
+        const arrows: Record<string, { direction: 'up' | 'down' | 'left' | 'right'; variant?: 'straight' | 'curved-right' | 'curved-left'; from: { x: number; y: number }; attachment?: 'left' | 'right' | 'top' | 'bottom' }[]> = {};
+
+        Object.entries(wordDefinitions).forEach(([word, data]) => {
+            if (!data.placement) return;
+            const key = `${data.placement.x}-${data.placement.y}`;
+            if (!placements[key]) placements[key] = [];
+            placements[key].push({ word, definition: data.definition });
+
+            const target = {
+                x: data.placement.x + (data.placement.direction === 'right' ? 1 : data.placement.direction === 'left' ? -1 : 0),
+                y: data.placement.y + (data.placement.direction === 'down' ? 1 : data.placement.direction === 'up' ? -1 : 0)
+            };
+
+            const withinBounds = !!(state.currentGrid && target.y >= 0 && target.x >= 0 && target.y < state.currentGrid.cells.length && target.x < state.currentGrid.cells[0].length);
+            const isTargetPlayable = !!(state.currentGrid && withinBounds && !state.currentGrid.cells[target.y][target.x].isBlack);
+
+            if (withinBounds && isTargetPlayable) {
+                const arrowKey = `${target.x}-${target.y}`;
+                if (!arrows[arrowKey]) arrows[arrowKey] = [];
+                let variant: 'straight' | 'curved-right' | 'curved-left' = 'straight';
+                if (data.placement.wordDirection === 'horizontal' && (data.placement.direction === 'down' || data.placement.direction === 'up')) {
+                    variant = data.placement.anchorRole === 'start' ? 'curved-right' : 'curved-left';
+                }
+
+                const attachment: 'left' | 'right' | 'top' | 'bottom' =
+                    data.placement.x < target.x
+                        ? 'left'
+                        : data.placement.x > target.x
+                          ? 'right'
+                          : data.placement.y < target.y
+                            ? 'top'
+                            : 'bottom';
+
+                arrows[arrowKey].push({
+                    direction: data.placement.direction,
+                    variant,
+                    from: { x: data.placement.x, y: data.placement.y },
+                    attachment
+                });
+            }
+        });
+
+        return {
+            wordsList: Array.from(words).sort(),
+            highlightedCells: highlighted,
+            definitionPlacements: placements,
+            arrowPlacements: arrows
+        };
+    }, [selectedWord, wordPositions, wordDefinitions, state.currentGrid]);
 
     return (
-        <div className="crossword-editor">
-            <Toolbar 
+        <div className="crossword-editor" onMouseDown={handleOutsideClick} style={appearanceVars}>
+            {showSetDialog && (
+                <div className="set-dialog-backdrop">
+                    <div className="set-dialog">
+                        <h3>Choisir ou créer un set de grilles</h3>
+                        <div className="dialog-section">
+                            <label className="input-label">Nom du nouveau set</label>
+                            <input
+                                type="text"
+                                value={newSetName}
+                                onChange={(e) => setNewSetName(e.target.value)}
+                                className="grid-name-input"
+                            />
+                            <button className="action-button" onClick={() => handleCreateNewSet(newSetName)}>
+                                Nouveau set de grille
+                            </button>
+                        </div>
+                        <div className="dialog-section">
+                            <label className="input-label">Charger un set existant</label>
+                            <div className="dialog-set-list">
+                                {gridSets.length > 0 ? (
+                                    gridSets.map((set) => (
+                                        <button
+                                            key={set.id}
+                                            className={`saved-grid-item ${set.id === currentSetId ? 'active' : ''}`}
+                                            onClick={() => handleSelectSet(set.id)}
+                                        >
+                                            <div>{set.name}</div>
+                                            <small>{set.grids.length} grilles</small>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="no-grids">Aucun set disponible</div>
+                                )}
+                            </div>
+                        </div>
+                        {currentSetId && (
+                            <button className="tool-button" onClick={() => setShowSetDialog(false)}>
+                                Continuer avec {currentSetName}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+            <Toolbar
                 onResize={handleResize}
                 currentGrid={state.currentGrid}
                 onInputFocus={setIsToolbarInputActive}
+                appearance={appearance}
+                onAppearanceChange={handleAppearanceChange}
+                savedGrids={savedGrids}
+                onSavedGridsChange={handleSavedGridsChange}
+                onGridLoad={handleGridLoad}
+                gridSets={gridSets}
+                currentSetName={currentSetName}
+                onSetNameChange={handleSetNameChange}
+                onNewSet={() => handleCreateNewSet()}
+                onExportSet={handleExportSet}
+                onSelectSet={handleSelectSet}
+                currentSetId={currentSetId}
             />
             <div className="editor-container">
                 <div className="editor-main">
-                    {state.currentGrid && (
-                        <CrosswordGrid
-                            cells={state.currentGrid.cells}
-                            onCellClick={handleCellClick}
-                            onCellUpdate={handleCellUpdate}
-                            selectedCell={state.selectedCell}
-                            selectedDirection={state.selectedDirection}
-                            onDirectionChange={toggleDirection}
-                        />
-                    )}
+                    <div className="grid-area" ref={gridAreaRef}>
+                        {state.currentGrid && (
+                            <CrosswordGrid
+                                cells={state.currentGrid.cells}
+                                onCellClick={handleCellClick}
+                                onCellUpdate={handleCellUpdate}
+                                selectedCell={state.selectedCell}
+                                selectedDirection={state.selectedDirection}
+                                onDirectionChange={toggleDirection}
+                                highlightedCells={highlightedCells}
+                                definitionPlacements={definitionPlacements}
+                                arrowPlacements={arrowPlacements}
+                            />
+                        )}
+                    </div>
                 </div>
                 <div className="words-sidebar">
                     <h3>Mots trouvés ({wordsList.length})</h3>
                     <div className="words-list">
-                        {wordsList.map((word, index) => (
-                            <div key={`${word}-${index}`} className="word-item">
-                                {word}
-                            </div>
-                        ))}
+                        {wordsList.map((word, index) => {
+                            const wordData = wordDefinitions[word];
+                            return (
+                                <button
+                                    key={`${word}-${index}`}
+                                    className={`word-item ${selectedWord === word ? 'active' : ''}`}
+                                    onClick={() => handleWordSelect(word)}
+                                >
+                                    <span className="word-label">{word}</span>
+                                    <span className="word-flags">
+                                        {wordData?.definition && <span title="Définition ajoutée">📝</span>}
+                                        {wordData?.placement && <span title="Emplacement choisi">📍</span>}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
+
+                    {selectedWord && (
+                        <div className="word-details">
+                            <div className="details-header">
+                                <h4>{selectedWord}</h4>
+                                {placementTargetWord === selectedWord && <span className="placement-hint">Cliquez sur une case noire adjacente au mot</span>}
+                            </div>
+                            <label className="input-label">Définition</label>
+                            <textarea
+                                value={wordDefinitions[selectedWord]?.definition || ''}
+                                onChange={(e) => handleDefinitionChange(e.target.value)}
+                                onFocus={() => dispatch({ type: 'SELECT_CELL', payload: null })}
+                                placeholder="Écrire ou coller la définition du mot"
+                            />
+                            <div className="definition-actions">
+                                <button
+                                    type="button"
+                                    className={placementTargetWord === selectedWord ? 'primary' : ''}
+                                    onClick={handlePlacementRequest}
+                                >
+                                    Sélectionner l'emplacement de la définition
+                                </button>
+                            </div>
+                            {wordDefinitions[selectedWord]?.placement && (
+                                <div className="placement-summary">
+                                    <div>
+                                        Case noire : ({wordDefinitions[selectedWord]!.placement!.x + 1}, {wordDefinitions[selectedWord]!.placement!.y + 1})
+                                    </div>
+                                    <label className="input-label">Orientation de la flèche</label>
+                                    <select
+                                        value={wordDefinitions[selectedWord]!.placement!.direction}
+                                        onChange={(e) => handleDirectionUpdate(e.target.value as 'up' | 'down' | 'left' | 'right')}
+                                    >
+                                        <option value="up">↑ Vers le haut</option>
+                                        <option value="down">↓ Vers le bas</option>
+                                        <option value="left">← Vers la gauche</option>
+                                        <option value="right">→ Vers la droite</option>
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
