@@ -8,7 +8,12 @@ type DefinitionDirection = 'up' | 'down' | 'left' | 'right';
 interface DefinitionMarker {
     word: string;
     definition?: string;
+}
+
+interface ArrowMarker {
     direction: DefinitionDirection;
+    variant?: 'straight' | 'curved-right';
+    from: { x: number; y: number };
 }
 
 interface CellProps {
@@ -19,6 +24,7 @@ interface CellProps {
     y: number;
     isHighlighted?: boolean;
     definitions?: DefinitionMarker[];
+    arrows?: ArrowMarker[];
     onClick: () => void;
     onChange: (changes: Partial<CellType>) => void;
 }
@@ -36,6 +42,7 @@ const CrosswordCell: React.FC<CellProps> = ({
     isSelected,
     isHighlighted,
     definitions,
+    arrows,
     onClick,
     onChange
 }) => {
@@ -45,12 +52,7 @@ const CrosswordCell: React.FC<CellProps> = ({
 
     const containerLayout = React.useMemo(() => {
         if (!definitions || definitions.length < 2) return '';
-        const hasHorizontal = definitions.some(def => def.direction === 'left' || def.direction === 'right');
-        const hasVertical = definitions.some(def => def.direction === 'up' || def.direction === 'down');
-
-        if (hasHorizontal && !hasVertical) return 'split-vertical';
-        if (hasVertical && !hasHorizontal) return 'split-horizontal';
-        return 'split-mixed';
+        return 'multiple';
     }, [definitions]);
 
     return (
@@ -64,11 +66,20 @@ const CrosswordCell: React.FC<CellProps> = ({
                     {definitions.map((definition, index) => (
                         <div
                             key={`${definition.word}-${index}`}
-                            className={`definition-marker direction-${definition.direction}`}
+                            className="definition-marker"
                         >
-                            <span className="arrow">{directionSymbol[definition.direction]}</span>
                             <span className="definition-text">{definition.definition || definition.word}</span>
                         </div>
+                    ))}
+                </div>
+            )}
+            {!isBlack && arrows && arrows.length > 0 && (
+                <div className="arrow-markers">
+                    {arrows.map((arrow, index) => (
+                        <span
+                            key={`${arrow.direction}-${index}`}
+                            className={`arrow-marker arrow-${arrow.direction} ${arrow.variant === 'curved-right' ? 'curved' : ''}`}
+                        />
                     ))}
                 </div>
             )}
@@ -85,6 +96,7 @@ interface CrosswordGridProps {
     onDirectionChange: () => void;
     highlightedCells?: Set<string>;
     definitionPlacements?: Record<string, DefinitionMarker[]>;
+    arrowPlacements?: Record<string, ArrowMarker[]>;
     onBlackCellClick?: (x: number, y: number) => void;
 }
 
@@ -97,6 +109,7 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
     onDirectionChange,
     highlightedCells,
     definitionPlacements,
+    arrowPlacements,
     onBlackCellClick
 }) => {
     return (
@@ -120,6 +133,7 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
                                 isSelected={selectedCell?.x === x && selectedCell?.y === y}
                                 isHighlighted={highlightedCells?.has(`${x}-${y}`)}
                                 definitions={definitionPlacements?.[`${x}-${y}`]}
+                                arrows={arrowPlacements?.[`${x}-${y}`]}
                                 onClick={() => {
                                     onCellClick(x, y);
                                     if (cell.isBlack && onBlackCellClick) {

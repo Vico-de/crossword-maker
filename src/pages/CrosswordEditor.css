@@ -13,6 +13,13 @@
   overflow: hidden;
 }
 
+.grid-area {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .editor-container {
   display: flex;
   flex: 1;

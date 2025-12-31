@@ -101,10 +101,11 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
 export const CrosswordEditor: React.FC = () => {
     const { state, dispatch } = useCrossword();
     const [isToolbarInputActive, setIsToolbarInputActive] = useState(false);
+    const gridAreaRef = React.useRef<HTMLDivElement | null>(null);
     const [selectedWord, setSelectedWord] = useState<string | null>(null);
     const [wordDefinitions, setWordDefinitions] = useState<Record<string, {
         definition: string;
-        placement?: { x: number; y: number; direction: 'up' | 'down' | 'left' | 'right' };
+        placement?: { x: number; y: number; direction: 'up' | 'down' | 'left' | 'right'; anchor: { x: number; y: number }; wordDirection: WordDirection };
     }>>({});
     const [placementTargetWord, setPlacementTargetWord] = useState<string | null>(null);
     // Supprimez la ligne avec setIsSaveDialogOpen si elle existe
@@ -268,7 +269,8 @@ export const CrosswordEditor: React.FC = () => {
     }, [handleKeyDown]);
 
     const handleCellClick = (x: number, y: number) => {
-        dispatch({ type: 'SELECT_CELL', payload: { x, y } });
+        const isSameCell = state.selectedCell?.x === x && state.selectedCell?.y === y;
+        dispatch({ type: 'SELECT_CELL', payload: isSameCell ? null : { x, y } });
 
         if (placementTargetWord) {
             attemptDefinitionPlacement(placementTargetWord, x, y);
@@ -329,7 +331,7 @@ export const CrosswordEditor: React.FC = () => {
             ...prev,
             [word]: {
                 definition: prev[word]?.definition || '',
-                placement: { x, y, direction }
+                placement: { x, y, direction, anchor, wordDirection: candidate.direction }
             }
         }));
         setSelectedWord(word);
@@ -357,6 +359,13 @@ export const CrosswordEditor: React.FC = () => {
         setPlacementTargetWord(selectedWord);
     };
 
+    const handleOutsideClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        if (gridAreaRef.current && !gridAreaRef.current.contains(event.target as Node)) {
+            dispatch({ type: 'SELECT_CELL', payload: null });
+            setPlacementTargetWord(null);
+        }
+    };
+
     const handleDirectionUpdate = (direction: 'up' | 'down' | 'left' | 'right') => {
         if (!selectedWord) return;
         setWordDefinitions((prev) => {
@@ -372,10 +381,11 @@ export const CrosswordEditor: React.FC = () => {
         });
     };
 
-    const {
+    const { 
         wordsList,
         highlightedCells,
-        definitionPlacements
+        definitionPlacements,
+        arrowPlacements
     } = useMemo(() => {
         const words = new Set<string>();
         wordPositions.forEach((position) => words.add(position.word));
@@ -388,42 +398,70 @@ export const CrosswordEditor: React.FC = () => {
             }
         }
 
-        const placements: Record<string, { word: string; definition?: string; direction: 'up' | 'down' | 'left' | 'right' }[]> = {};
+        const placements: Record<string, { word: string; definition?: string }[]> = {};
+        const arrows: Record<string, { direction: 'up' | 'down' | 'left' | 'right'; variant?: 'straight' | 'curved-right'; from: { x: number; y: number } }[]> = {};
+
         Object.entries(wordDefinitions).forEach(([word, data]) => {
             if (!data.placement) return;
             const key = `${data.placement.x}-${data.placement.y}`;
             if (!placements[key]) placements[key] = [];
-            placements[key].push({ word, definition: data.definition, direction: data.placement.direction });
+            placements[key].push({ word, definition: data.definition });
+
+            const target = {
+                x: data.placement.x + (data.placement.direction === 'right' ? 1 : data.placement.direction === 'left' ? -1 : 0),
+                y: data.placement.y + (data.placement.direction === 'down' ? 1 : data.placement.direction === 'up' ? -1 : 0)
+            };
+
+            const withinBounds = !!(state.currentGrid && target.y >= 0 && target.x >= 0 && target.y < state.currentGrid.cells.length && target.x < state.currentGrid.cells[0].length);
+            const isTargetPlayable = !!(state.currentGrid && withinBounds && !state.currentGrid.cells[target.y][target.x].isBlack);
+
+            if (withinBounds && isTargetPlayable) {
+                const arrowKey = `${target.x}-${target.y}`;
+                if (!arrows[arrowKey]) arrows[arrowKey] = [];
+                const variant = data.placement.wordDirection === 'horizontal' && (data.placement.direction === 'down' || data.placement.direction === 'up')
+                    ? 'curved-right'
+                    : 'straight';
+
+                arrows[arrowKey].push({
+                    direction: data.placement.direction,
+                    variant,
+                    from: { x: data.placement.x, y: data.placement.y }
+                });
+            }
         });
 
         return {
             wordsList: Array.from(words).sort(),
             highlightedCells: highlighted,
-            definitionPlacements: placements
+            definitionPlacements: placements,
+            arrowPlacements: arrows
         };
-    }, [selectedWord, wordPositions, wordDefinitions]);
+    }, [selectedWord, wordPositions, wordDefinitions, state.currentGrid]);
 
     return (
-        <div className="crossword-editor">
-            <Toolbar 
+        <div className="crossword-editor" onMouseDown={handleOutsideClick}>
+            <Toolbar
                 onResize={handleResize}
                 currentGrid={state.currentGrid}
                 onInputFocus={setIsToolbarInputActive}
             />
             <div className="editor-container">
                 <div className="editor-main">
-                    {state.currentGrid && (
-                        <CrosswordGrid
-                            cells={state.currentGrid.cells}
-                            onCellClick={handleCellClick}
-                            onCellUpdate={handleCellUpdate}
-                            selectedCell={state.selectedCell}
-                            selectedDirection={state.selectedDirection}
-                            onDirectionChange={toggleDirection}
-                            highlightedCells={highlightedCells}
-                            definitionPlacements={definitionPlacements}
-                        />
-                    )}
+                    <div className="grid-area" ref={gridAreaRef}>
+                        {state.currentGrid && (
+                            <CrosswordGrid
+                                cells={state.currentGrid.cells}
+                                onCellClick={handleCellClick}
+                                onCellUpdate={handleCellUpdate}
+                                selectedCell={state.selectedCell}
+                                selectedDirection={state.selectedDirection}
+                                onDirectionChange={toggleDirection}
+                                highlightedCells={highlightedCells}
+                                definitionPlacements={definitionPlacements}
+                                arrowPlacements={arrowPlacements}
+                            />
+                        )}
+                    </div>
                 </div>
                 <div className="words-sidebar">
                     <h3>Mots trouvés ({wordsList.length})</h3>
@@ -456,6 +494,7 @@ export const CrosswordEditor: React.FC = () => {
                             <textarea
                                 value={wordDefinitions[selectedWord]?.definition || ''}
                                 onChange={(e) => handleDefinitionChange(e.target.value)}
+                                onFocus={() => dispatch({ type: 'SELECT_CELL', payload: null })}
                                 placeholder="Écrire ou coller la définition du mot"
                             />
                             <div className="definition-actions">
