@@ -573,18 +573,16 @@ const buildPdfDocument = (pages: PdfPage[]) => {
 
     preparedPages.forEach((page) => {
         const imageBytes = dataUrlToUint8(page.dataUrl);
+
+        // Image binaire encodée en JPEG.
         writeStream(
             page.imageId,
             `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>`,
             imageBytes
         );
 
-        const lines = [
-            'q',
-            `${page.width} 0 0 ${page.height} 0 ${page.label ? 0 : 0} cm`,
-            `/${page.name} Do`,
-            'Q'
-        ];
+        // Flux de dessin : place l'image puis ajoute éventuellement un libellé.
+        const lines = ['q', `${page.width} 0 0 ${page.height} 0 0 cm`, `/${page.name} Do`, 'Q'];
 
         if (page.label) {
             const y = page.mediaHeight - 14;
@@ -602,15 +600,15 @@ const buildPdfDocument = (pages: PdfPage[]) => {
             `/XObject << /${page.name} ${page.imageId} 0 R >>`,
             `/ProcSet [ /PDF ${fontId ? '/Text ' : ''}/ImageC ]`
         ];
+        if (fontId) resourcesParts.push(`/Font << /F1 ${fontId} 0 R >>`);
 
-        if (fontId) {
-            resourcesParts.push(`/Font << /F1 ${fontId} 0 R >>`);
-        }
+        // Dictionnaire de page isolé pour éviter les parenthèses imbriquées difficiles à relire.
+        const resourceDict = `<< ${resourcesParts.join(' ')} >>`;
+        const pageDict =
+            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${resourceDict} ` +
+            `/MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`;
 
-        writeObject(
-            page.pageId,
-            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${`<< ${resourcesParts.join(' ')} >>`} /MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`
-        );
+        writeObject(page.pageId, pageDict);
     });
 
     writeObject(
