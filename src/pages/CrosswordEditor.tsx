@@ -1,8 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CrosswordGrid } from '../components/grid/CrosswordGrid';
 import { Toolbar, type AppearanceSettings } from '../components/toolbar/Toolbar';
 import { useCrossword } from '../context/CrosswordContext';
-import type { Cell } from '../models/types';
+import type { Cell, Grid, GridSet, SavedGrid } from '../models/types';
 import './CrosswordEditor.css';
 
 // Supprimez l'import de SaveManager et SavedGrid s'ils existent
@@ -98,6 +98,22 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
     return positions;
 };
 
+const buildEmptyGrid = (width: number, height: number) => {
+    return {
+        name: '',
+        size: { width, height },
+        cells: Array(height)
+            .fill(null)
+            .map((_, y) =>
+                Array(width)
+                    .fill(null)
+                    .map((__, x) => ({ value: '', isBlack: false, x, y, isHighlighted: false }))
+            ),
+        words: [],
+        status: 'initial' as const
+    };
+};
+
 export const CrosswordEditor: React.FC = () => {
     const { state, dispatch } = useCrossword();
     const [isToolbarInputActive, setIsToolbarInputActive] = useState(false);
@@ -125,7 +141,33 @@ export const CrosswordEditor: React.FC = () => {
         gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
         definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
     });
-    // Supprimez la ligne avec setIsSaveDialogOpen si elle existe
+    const initialSets: GridSet[] = useMemo(() => {
+        const storedSets = localStorage.getItem('gridSets');
+        if (storedSets) return JSON.parse(storedSets);
+
+        const legacyGrids = localStorage.getItem('savedGrids');
+        if (legacyGrids) {
+            const grids: SavedGrid[] = JSON.parse(legacyGrids);
+            if (grids.length > 0) {
+                return [{ id: 'legacy', name: 'Set local', grids }];
+            }
+        }
+        return [];
+    }, []);
+    const storedSetId = useMemo(() => localStorage.getItem('currentSetId'), []);
+    const defaultSetId = storedSetId && initialSets.some((set) => set.id === storedSetId)
+        ? storedSetId
+        : initialSets[0]?.id || null;
+    const [gridSets, setGridSets] = useState<GridSet[]>(initialSets);
+    const [currentSetId, setCurrentSetId] = useState<string | null>(defaultSetId);
+    const [currentSetName, setCurrentSetName] = useState<string>(
+        initialSets.find((set) => set.id === defaultSetId)?.name || 'Nouveau set'
+    );
+    const [savedGrids, setSavedGrids] = useState<SavedGrid[]>(
+        initialSets.find((set) => set.id === defaultSetId)?.grids || []
+    );
+    const [showSetDialog, setShowSetDialog] = useState(true);
+    const [newSetName, setNewSetName] = useState('Nouveau set');
 
     const wordPositions = useMemo(() => {
         if (!state.currentGrid) return [];
@@ -146,6 +188,96 @@ export const CrosswordEditor: React.FC = () => {
         }),
         [appearance]
     );
+
+    useEffect(() => {
+        localStorage.setItem('gridSets', JSON.stringify(gridSets));
+        if (currentSetId) {
+            localStorage.setItem('currentSetId', currentSetId);
+        } else {
+            localStorage.removeItem('currentSetId');
+        }
+    }, [gridSets, currentSetId]);
+
+    useEffect(() => {
+        const current = gridSets.find((set) => set.id === currentSetId);
+        if (current) {
+            setSavedGrids(current.grids);
+            setCurrentSetName(current.name);
+        }
+    }, [gridSets, currentSetId]);
+
+    const resetEditingState = useCallback(() => {
+        const size = state.currentGrid?.size || { width: 15, height: 15 };
+        setWordDefinitions({});
+        setSelectedWord(null);
+        setPlacementTargetWord(null);
+        dispatch({ type: 'LOAD_GRID', payload: buildEmptyGrid(size.width, size.height) });
+    }, [dispatch, state.currentGrid]);
+
+    const handleSavedGridsChange = useCallback((grids: SavedGrid[]) => {
+        setSavedGrids(grids);
+        if (currentSetId) {
+            setGridSets((prev) => prev.map((set) => (set.id === currentSetId ? { ...set, grids } : set)));
+        } else {
+            const id = Date.now().toString();
+            const name = currentSetName || 'Nouveau set';
+            const newSet: GridSet = { id, name, grids };
+            setGridSets([newSet]);
+            setCurrentSetId(id);
+            setCurrentSetName(name);
+        }
+    }, [currentSetId, currentSetName]);
+
+    const handleSetNameChange = useCallback((name: string) => {
+        setCurrentSetName(name);
+        if (!currentSetId) return;
+        setGridSets((prev) => prev.map((set) => (set.id === currentSetId ? { ...set, name } : set)));
+    }, [currentSetId]);
+
+    const handleSelectSet = useCallback((id: string) => {
+        const target = gridSets.find((set) => set.id === id);
+        if (!target) return;
+        setCurrentSetId(id);
+        setCurrentSetName(target.name);
+        setSavedGrids(target.grids);
+        resetEditingState();
+        setShowSetDialog(false);
+    }, [gridSets, resetEditingState]);
+
+    const handleCreateNewSet = useCallback((nameOverride?: string) => {
+        const name = (nameOverride ?? newSetName).trim() || 'Nouveau set';
+        const id = Date.now().toString();
+        const newSet: GridSet = { id, name, grids: [] };
+        setGridSets((prev) => [...prev, newSet]);
+        setCurrentSetId(id);
+        setCurrentSetName(name);
+        setSavedGrids([]);
+        resetEditingState();
+        setShowSetDialog(false);
+    }, [newSetName, resetEditingState]);
+
+    const handleExportSet = useCallback(() => {
+        if (!currentSetId) {
+            window.alert('Créez ou chargez un set avant d\'exporter.');
+            return;
+        }
+        const exportName = (currentSetName || 'set-sans-nom').trim();
+        const payload = { name: exportName, grids: savedGrids };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${exportName.replace(/\s+/g, '_').toLowerCase() || 'set'}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+    }, [currentSetId, currentSetName, savedGrids]);
+
+    const handleGridLoad = useCallback((grid: Grid) => {
+        setSelectedWord(null);
+        setPlacementTargetWord(null);
+        setWordDefinitions({});
+        dispatch({ type: 'LOAD_GRID', payload: grid });
+    }, [dispatch]);
     
     const handleCellUpdate = useCallback((x: number, y: number, changes: Partial<Cell>) => {
         if (!state.currentGrid?.cells[y]?.[x]) return;
@@ -209,8 +341,8 @@ export const CrosswordEditor: React.FC = () => {
 
     // Modifiez le handleKeyDown pour vérifier si le dialog est ouvert
     const handleKeyDown = useCallback((event: KeyboardEvent) => {
-        // Si un input dans la toolbar est actif, on ne gère pas les touches
-        if (isToolbarInputActive) return;
+        // Si un input dans la toolbar est actif ou qu'aucun set n'est choisi, on ne gère pas les touches
+        if (isToolbarInputActive || showSetDialog) return;
 
         if (!state.selectedCell || !state.currentGrid) return;
 
@@ -291,7 +423,7 @@ export const CrosswordEditor: React.FC = () => {
                     moveToNextCell();
                 }
         }
-    }, [state.selectedCell, state.currentGrid, state.selectedDirection, handleCellUpdate, dispatch, isToolbarInputActive]);
+    }, [state.selectedCell, state.currentGrid, state.selectedDirection, handleCellUpdate, dispatch, isToolbarInputActive, showSetDialog]);
 
     React.useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);
@@ -529,12 +661,65 @@ export const CrosswordEditor: React.FC = () => {
 
     return (
         <div className="crossword-editor" onMouseDown={handleOutsideClick} style={appearanceVars}>
+            {showSetDialog && (
+                <div className="set-dialog-backdrop">
+                    <div className="set-dialog">
+                        <h3>Choisir ou créer un set de grilles</h3>
+                        <div className="dialog-section">
+                            <label className="input-label">Nom du nouveau set</label>
+                            <input
+                                type="text"
+                                value={newSetName}
+                                onChange={(e) => setNewSetName(e.target.value)}
+                                className="grid-name-input"
+                            />
+                            <button className="action-button" onClick={() => handleCreateNewSet(newSetName)}>
+                                Nouveau set de grille
+                            </button>
+                        </div>
+                        <div className="dialog-section">
+                            <label className="input-label">Charger un set existant</label>
+                            <div className="dialog-set-list">
+                                {gridSets.length > 0 ? (
+                                    gridSets.map((set) => (
+                                        <button
+                                            key={set.id}
+                                            className={`saved-grid-item ${set.id === currentSetId ? 'active' : ''}`}
+                                            onClick={() => handleSelectSet(set.id)}
+                                        >
+                                            <div>{set.name}</div>
+                                            <small>{set.grids.length} grilles</small>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="no-grids">Aucun set disponible</div>
+                                )}
+                            </div>
+                        </div>
+                        {currentSetId && (
+                            <button className="tool-button" onClick={() => setShowSetDialog(false)}>
+                                Continuer avec {currentSetName}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
             <Toolbar
                 onResize={handleResize}
                 currentGrid={state.currentGrid}
                 onInputFocus={setIsToolbarInputActive}
                 appearance={appearance}
                 onAppearanceChange={handleAppearanceChange}
+                savedGrids={savedGrids}
+                onSavedGridsChange={handleSavedGridsChange}
+                onGridLoad={handleGridLoad}
+                gridSets={gridSets}
+                currentSetName={currentSetName}
+                onSetNameChange={handleSetNameChange}
+                onNewSet={() => handleCreateNewSet()}
+                onExportSet={handleExportSet}
+                onSelectSet={handleSelectSet}
+                currentSetId={currentSetId}
             />
             <div className="editor-container">
                 <div className="editor-main">

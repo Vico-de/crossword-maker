@@ -82,18 +82,28 @@ const CrosswordCell: React.FC<CellProps> = ({
     definitions,
     arrows,
     onClick,
-    onChange
+    onChange,
+    x,
+    y
 }) => {
     const cellClassName = `grid-cell ${isBlack ? 'black' : ''} ${
         isSelected ? 'selected' : ''
     } ${isHighlighted ? 'highlighted' : ''}`;
 
     const slotCount = definitions?.length ?? 1;
+    const borderColor = 'var(--grid-border-color, #ccc)';
+    const cellStyle: React.CSSProperties = {
+        borderRight: `1px solid ${borderColor}`,
+        borderBottom: `1px solid ${borderColor}`,
+        borderTop: y === 0 ? `1px solid ${borderColor}` : 'none',
+        borderLeft: x === 0 ? `1px solid ${borderColor}` : 'none'
+    };
 
     return (
         <div
             className={cellClassName}
             onClick={onClick}
+            style={cellStyle}
         >
             {!isBlack && value}
             {isBlack && definitions && definitions.length > 0 && (

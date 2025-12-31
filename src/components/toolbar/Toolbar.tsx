@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { useCrossword } from '../../context/CrosswordContext';
-import type { Grid, SavedGrid } from '../../models/types';
+import React, { useEffect, useRef, useState } from 'react';
+import type { Grid, GridSet, SavedGrid } from '../../models/types';
 import './Toolbar.css';
 
 export interface AppearanceSettings {
@@ -20,6 +19,16 @@ interface ToolbarProps {
     onInputFocus: (isFocused: boolean) => void;
     appearance: AppearanceSettings;
     onAppearanceChange: (changes: Partial<AppearanceSettings>) => void;
+    savedGrids: SavedGrid[];
+    onSavedGridsChange: (grids: SavedGrid[]) => void;
+    onGridLoad: (grid: Grid) => void;
+    gridSets: GridSet[];
+    currentSetName: string;
+    onSetNameChange: (name: string) => void;
+    onNewSet: () => void;
+    onExportSet: () => void;
+    onSelectSet: (id: string) => void;
+    currentSetId: string | null;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -27,9 +36,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     currentGrid,
     onInputFocus,
     appearance,
-    onAppearanceChange
+    onAppearanceChange,
+    savedGrids,
+    onSavedGridsChange,
+    onGridLoad,
+    gridSets,
+    currentSetName,
+    onSetNameChange,
+    onNewSet,
+    onExportSet,
+    onSelectSet,
+    currentSetId
 }) => {
-    const { dispatch } = useCrossword();
     const [activePanel, setActivePanel] = useState<'info' | 'resize' | 'appearance' | null>(null);
     const [gridName, setGridName] = useState(currentGrid?.name || '');
     const [showLoadDropdown, setShowLoadDropdown] = useState(false);
@@ -37,12 +55,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         width: currentGrid?.size.width || 15,
         height: currentGrid?.size.height || 15
     });
-    const [savedGrids, setSavedGrids] = useState<SavedGrid[]>(() => {
-        const saved = localStorage.getItem('savedGrids');
-        return saved ? JSON.parse(saved) : [];
-    });
     const [gridFontCustom, setGridFontCustom] = useState(appearance.gridFont);
     const [definitionFontCustom, setDefinitionFontCustom] = useState(appearance.definitionFont);
+    const [showSetDropdown, setShowSetDropdown] = useState(false);
+    const gridFontFileInput = useRef<HTMLInputElement | null>(null);
+    const definitionFontFileInput = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        setGridName(currentGrid?.name || '');
+    }, [currentGrid]);
 
     const handleSave = () => {
         if (!gridName.trim() || !currentGrid) return;
@@ -58,16 +79,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         };
 
         const updatedGrids = [...savedGrids, newSavedGrid];
-        localStorage.setItem('savedGrids', JSON.stringify(updatedGrids));
-        setSavedGrids(updatedGrids);
+        onSavedGridsChange(updatedGrids);
     };
 
     const handleLoad = (savedGrid: SavedGrid) => {
         if (window.confirm(`Charger la grille "${savedGrid.name}" ?`)) {
-            dispatch({
-                type: 'LOAD_GRID',
-                payload: savedGrid.grid
-            });
+            onGridLoad(savedGrid.grid);
             setShowLoadDropdown(false);
         }
     };
@@ -79,8 +96,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette grille ?')) return;
 
         const updatedGrids = savedGrids.filter(g => g.id !== id);
-        localStorage.setItem('savedGrids', JSON.stringify(updatedGrids));
-        setSavedGrids(updatedGrids);
+        onSavedGridsChange(updatedGrids);
     };
 
     const handleResize = () => {
@@ -118,6 +134,33 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         return match ? match.value : 'custom';
     };
 
+    const loadFontFile = async (file: File, target: 'grid' | 'definition') => {
+        try {
+            const fontName = file.name.replace(/\.[^/.]+$/, '') || 'CustomFont';
+            const fontData = await file.arrayBuffer();
+            const fontFace = new FontFace(fontName, fontData);
+            await fontFace.load();
+            (document as Document).fonts.add(fontFace);
+
+            const fontValue = `'${fontName}'`;
+            if (target === 'grid') {
+                setGridFontCustom(fontValue);
+                handleAppearanceFieldChange('gridFont', fontValue);
+            } else {
+                setDefinitionFontCustom(fontValue);
+                handleAppearanceFieldChange('definitionFont', fontValue);
+            }
+        } catch (error) {
+            console.error('Erreur lors du chargement de la police :', error);
+            window.alert('Impossible de charger cette police. Merci de réessayer.');
+        }
+    };
+
+    const triggerFontUpload = (target: 'grid' | 'definition') => {
+        const input = target === 'grid' ? gridFontFileInput.current : definitionFontFileInput.current;
+        input?.click();
+    };
+
     return (
         <div className="toolbar-container">
             <div className="toolbar-buttons">
@@ -139,61 +182,121 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     </button>
                 ))}
             </div>
+            <div className="toolbar-status">
+                <span className="status-item">Set : {currentSetName || 'Nouveau set'}</span>
+                <span className="status-item">Grille : {gridName || 'Sans nom'}</span>
+            </div>
 
             {activePanel === 'info' && (
                 <div className="tool-content">
-                    <div className="tool-panel">
-                        <input
-                            type="text"
-                            className="grid-name-input"
-                            placeholder="Nom de la grille"
-                            value={gridName}
-                            onChange={(e) => setGridName(e.target.value)}
-                            onFocus={() => onInputFocus(true)}
-                            onBlur={() => onInputFocus(false)}
-                        />
-                        <div className="action-group">
-                            <button className="action-button" onClick={handleSave}>
-                                Sauvegarder
-                            </button>
-                            <div className="load-dropdown">
-                                <button
-                                    className="action-button"
-                                    onClick={() => setShowLoadDropdown(!showLoadDropdown)}
-                                >
-                                    Charger ▼
+                    <div className="tool-panel info-panel">
+                        <div className="set-column">
+                            <label className="input-label">Set de grilles</label>
+                            <input
+                                type="text"
+                                className="grid-name-input"
+                                placeholder="Nom du set"
+                                value={currentSetName}
+                                onChange={(e) => onSetNameChange(e.target.value)}
+                                onFocus={() => onInputFocus(true)}
+                                onBlur={() => onInputFocus(false)}
+                            />
+                            <div className="action-group">
+                                <button className="action-button" type="button" onClick={onExportSet}>
+                                    Exporter le set
                                 </button>
-                                {showLoadDropdown && (
-                                    <div className="dropdown-content">
-                                        {savedGrids.length > 0 ? (
-                                            savedGrids.map((savedGrid) => (
-                                                <div
-                                                    key={savedGrid.id}
-                                                    className="saved-grid-item"
-                                                    onClick={() => handleLoad(savedGrid)}
-                                                >
-                                                    <div>
-                                                        <div>{savedGrid.name}</div>
-                                                        <small>
-                                                            {new Date(savedGrid.timestamp).toLocaleDateString()}
-                                                        </small>
-                                                    </div>
-                                                    <button
-                                                        onClick={(e) => handleDelete(savedGrid.id, e)}
-                                                        className="tool-button"
-                                                        aria-label="Supprimer"
+                                <button className="tool-button" type="button" onClick={onNewSet}>
+                                    Nouveau set de grille
+                                </button>
+                                <div className="load-dropdown">
+                                    <button
+                                        className="tool-button"
+                                        onClick={() => setShowSetDropdown(!showSetDropdown)}
+                                        type="button"
+                                    >
+                                        Charger un set ▼
+                                    </button>
+                                    {showSetDropdown && (
+                                        <div className="dropdown-content">
+                                            {gridSets.length > 0 ? (
+                                                gridSets.map((set) => (
+                                                    <div
+                                                        key={set.id}
+                                                        className={`saved-grid-item ${set.id === currentSetId ? 'active' : ''}`}
+                                                        onClick={() => {
+                                                            onSelectSet(set.id);
+                                                            setShowSetDropdown(false);
+                                                        }}
                                                     >
-                                                        ×
-                                                    </button>
+                                                        <div>
+                                                            <div>{set.name}</div>
+                                                            <small>{set.grids.length} grilles</small>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="no-grids">Aucun set enregistré</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid-column">
+                            <label className="input-label">Grille active</label>
+                            <input
+                                type="text"
+                                className="grid-name-input"
+                                placeholder="Nom de la grille"
+                                value={gridName}
+                                onChange={(e) => setGridName(e.target.value)}
+                                onFocus={() => onInputFocus(true)}
+                                onBlur={() => onInputFocus(false)}
+                            />
+                            <div className="action-group">
+                                <button className="action-button" onClick={handleSave}>
+                                    Sauvegarder
+                                </button>
+                                <div className="load-dropdown">
+                                    <button
+                                        className="action-button"
+                                        onClick={() => setShowLoadDropdown(!showLoadDropdown)}
+                                    >
+                                        Charger ▼
+                                    </button>
+                                    {showLoadDropdown && (
+                                        <div className="dropdown-content">
+                                            {savedGrids.length > 0 ? (
+                                                savedGrids.map((savedGrid) => (
+                                                    <div
+                                                        key={savedGrid.id}
+                                                        className="saved-grid-item"
+                                                        onClick={() => handleLoad(savedGrid)}
+                                                    >
+                                                        <div>
+                                                            <div>{savedGrid.name}</div>
+                                                            <small>
+                                                                {new Date(savedGrid.timestamp).toLocaleDateString()}
+                                                            </small>
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => handleDelete(savedGrid.id, e)}
+                                                            className="tool-button"
+                                                            aria-label="Supprimer"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="no-grids">
+                                                    Aucune grille sauvegardée
                                                 </div>
-                                            ))
-                                        ) : (
-                                            <div className="no-grids">
-                                                Aucune grille sauvegardée
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -265,7 +368,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 onChange={(e) => {
                                     const value = e.target.value;
                                     if (value === 'custom') {
-                                        onAppearanceChange({ gridFont: gridFontCustom });
+                                        triggerFontUpload('grid');
                                     } else {
                                         onAppearanceChange({ gridFont: value });
                                     }
@@ -280,18 +383,27 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 ))}
                             </select>
                             {selectedFontValue(appearance.gridFont) === 'custom' && (
-                                <input
-                                    type="text"
-                                    value={gridFontCustom}
-                                    onChange={(e) => {
-                                        setGridFontCustom(e.target.value);
-                                        handleAppearanceFieldChange('gridFont', e.target.value);
-                                    }}
-                                    onFocus={() => onInputFocus(true)}
-                                    onBlur={() => onInputFocus(false)}
-                                    className="color-text-input"
-                                    placeholder="Ex: Inter, Arial, sans-serif"
-                                />
+                                <div className="custom-font-row">
+                                    <input
+                                        type="text"
+                                        value={gridFontCustom}
+                                        onChange={(e) => {
+                                            setGridFontCustom(e.target.value);
+                                            handleAppearanceFieldChange('gridFont', e.target.value);
+                                        }}
+                                        onFocus={() => onInputFocus(true)}
+                                        onBlur={() => onInputFocus(false)}
+                                        className="color-text-input"
+                                        placeholder="Ex: Inter, Arial, sans-serif"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="tool-button"
+                                        onClick={() => triggerFontUpload('grid')}
+                                    >
+                                        Charger une police
+                                    </button>
+                                </div>
                             )}
                         </div>
 
@@ -303,7 +415,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 onChange={(e) => {
                                     const value = e.target.value;
                                     if (value === 'custom') {
-                                        onAppearanceChange({ definitionFont: definitionFontCustom });
+                                        triggerFontUpload('definition');
                                     } else {
                                         onAppearanceChange({ definitionFont: value });
                                     }
@@ -318,23 +430,58 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 ))}
                             </select>
                             {selectedFontValue(appearance.definitionFont) === 'custom' && (
-                                <input
-                                    type="text"
-                                    value={definitionFontCustom}
-                                    onChange={(e) => {
-                                        setDefinitionFontCustom(e.target.value);
-                                        handleAppearanceFieldChange('definitionFont', e.target.value);
-                                    }}
-                                    onFocus={() => onInputFocus(true)}
-                                    onBlur={() => onInputFocus(false)}
-                                    className="color-text-input"
-                                    placeholder="Ex: Inter, Georgia"
-                                />
+                                <div className="custom-font-row">
+                                    <input
+                                        type="text"
+                                        value={definitionFontCustom}
+                                        onChange={(e) => {
+                                            setDefinitionFontCustom(e.target.value);
+                                            handleAppearanceFieldChange('definitionFont', e.target.value);
+                                        }}
+                                        onFocus={() => onInputFocus(true)}
+                                        onBlur={() => onInputFocus(false)}
+                                        className="color-text-input"
+                                        placeholder="Ex: Inter, Georgia"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="tool-button"
+                                        onClick={() => triggerFontUpload('definition')}
+                                    >
+                                        Charger une police
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
                 </div>
             )}
+            <input
+                ref={gridFontFileInput}
+                type="file"
+                accept=".ttf,.otf,.woff,.woff2"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                        loadFontFile(file, 'grid');
+                        e.target.value = '';
+                    }
+                }}
+            />
+            <input
+                ref={definitionFontFileInput}
+                type="file"
+                accept=".ttf,.otf,.woff,.woff2"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                        loadFontFile(file, 'definition');
+                        e.target.value = '';
+                    }
+                }}
+            />
         </div>
     );
 };

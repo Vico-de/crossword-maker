@@ -106,3 +106,9 @@ export interface SavedGrid {
     timestamp: number;
     grid: Grid;
 }
+
+export interface GridSet {
+    id: string;
+    name: string;
+    grids: SavedGrid[];
+}
