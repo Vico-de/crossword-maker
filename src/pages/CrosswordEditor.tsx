@@ -101,7 +101,43 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
                 cells: [...currentCells]
             });
         }
+
+        writeObject(
+            page.pageId,
+            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${`<< ${resourcesParts.join(' ')} >>`} /MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`
+        );
+    });
+
+    writeObject(
+        pagesId,
+        `<< /Type /Pages /Count ${preparedPages.length} /Kids [${preparedPages
+            .map((page) => `${page.pageId} 0 R`)
+            .join(' ')}] >>`
+    );
+    writeObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+
+    const xrefStart = byteLength();
+    chunks.push(`xref\n0 ${nextId}\n`);
+    chunks.push('0000000000 65535 f \n');
+    for (let i = 1; i < nextId; i++) {
+        const offset = offsets[i] ?? 0;
+        chunks.push(`${offset.toString().padStart(10, '0')} 00000 n \n`);
     }
+    chunks.push(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+
+    const total = byteLength();
+    const buffer = new Uint8Array(total);
+    let cursor = 0;
+    chunks.forEach((chunk) => {
+        if (typeof chunk === 'string') {
+            const encoded = encoder.encode(chunk);
+            buffer.set(encoded, cursor);
+            cursor += encoded.length;
+        } else {
+            buffer.set(chunk, cursor);
+            cursor += chunk.length;
+        }
+    });
 
     return positions;
 };
@@ -134,6 +170,18 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
     gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
     definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
 };
+
+// Compare deux ensembles d'apparence pour éviter des boucles de mise à jour.
+const areAppearancesEqual = (a: AppearanceSettings, b: AppearanceSettings) =>
+    a.blackCellColor === b.blackCellColor &&
+    a.cellBackgroundColor === b.cellBackgroundColor &&
+    a.arrowColor === b.arrowColor &&
+    a.letterColor === b.letterColor &&
+    a.definitionTextColor === b.definitionTextColor &&
+    a.borderColor === b.borderColor &&
+    a.separatorColor === b.separatorColor &&
+    a.gridFont === b.gridFont &&
+    a.definitionFont === b.definitionFont;
 
 type PackedDefinition = [
     string,
@@ -741,16 +789,29 @@ export const CrosswordEditor: React.FC = () => {
 
     useEffect(() => {
         const current = gridSets.find((set) => set.id === currentSetId);
-        if (current) {
-            setSavedGrids(current.grids);
-            setCurrentSetName(current.name);
-            setAppearance({ ...DEFAULT_APPEARANCE, ...(current.appearance || {}) });
-        }
+        if (!current) return;
+
+        setSavedGrids(current.grids);
+        setCurrentSetName(current.name);
+
+        const nextAppearance = { ...DEFAULT_APPEARANCE, ...(current.appearance || {}) };
+        setAppearance((prev) => (areAppearancesEqual(prev, nextAppearance) ? prev : nextAppearance));
     }, [gridSets, currentSetId]);
 
     useEffect(() => {
         if (!currentSetId) return;
-        setGridSets((prev) => prev.map((set) => (set.id === currentSetId ? { ...set, appearance } : set)));
+        setGridSets((prev) => {
+            let changed = false;
+            const next = prev.map((set) => {
+                if (set.id !== currentSetId) return set;
+                if (areAppearancesEqual(set.appearance || DEFAULT_APPEARANCE, appearance)) {
+                    return set;
+                }
+                changed = true;
+                return { ...set, appearance };
+            });
+            return changed ? next : prev;
+        });
     }, [appearance, currentSetId]);
 
     const resetEditingState = useCallback(() => {
