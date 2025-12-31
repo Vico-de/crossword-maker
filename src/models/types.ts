@@ -128,6 +128,7 @@ export interface GridSet {
     grids: SavedGrid[];
     appearance?: {
         blackCellColor: string;
+        cellBackgroundColor: string;
         arrowColor: string;
         letterColor: string;
         definitionTextColor: string;

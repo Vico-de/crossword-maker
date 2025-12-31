@@ -4,6 +4,7 @@ import './Toolbar.css';
 
 export interface AppearanceSettings {
     blackCellColor: string;
+    cellBackgroundColor: string;
     arrowColor: string;
     letterColor: string;
     definitionTextColor: string;
@@ -83,20 +84,51 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
     const handleSave = () => {
         if (!gridName.trim() || !currentGrid) return;
-
+        const baseName = gridName.trim();
+        const existingIndex = savedGrids.findIndex((g) => g.name === baseName);
         const newSavedGrid: SavedGrid = {
             id: Date.now().toString(),
-            name: gridName.trim(),
+            name: baseName,
             timestamp: Date.now(),
             grid: {
                 ...currentGrid,
-                name: gridName.trim()
+                name: baseName
             },
             definitions
         };
 
-        const updatedGrids = [...savedGrids, newSavedGrid];
-        onSavedGridsChange(updatedGrids);
+        if (existingIndex >= 0) {
+            const replace = window.confirm(
+                'Une grille porte déjà ce nom. OK pour la remplacer, Annuler pour créer une copie.'
+            );
+
+            if (replace) {
+                const updatedGrids = savedGrids.map((grid, index) =>
+                    index === existingIndex
+                        ? { ...newSavedGrid, id: grid.id, timestamp: Date.now() }
+                        : grid
+                );
+                onSavedGridsChange(updatedGrids);
+                return;
+            }
+
+            let copyIndex = 1;
+            let copyName = `${baseName} (copie)`;
+            const existingNames = new Set(savedGrids.map((g) => g.name));
+            while (existingNames.has(copyName)) {
+                copyIndex += 1;
+                copyName = `${baseName} (copie ${copyIndex})`;
+            }
+
+            onSavedGridsChange([
+                ...savedGrids,
+                { ...newSavedGrid, name: copyName, grid: { ...newSavedGrid.grid, name: copyName } }
+            ]);
+            setGridName(copyName);
+            return;
+        }
+
+        onSavedGridsChange([...savedGrids, newSavedGrid]);
     };
 
     const handleLoad = (savedGrid: SavedGrid) => {
@@ -135,6 +167,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
     const colorFields: { key: keyof AppearanceSettings; label: string }[] = [
         { key: 'blackCellColor', label: 'Couleur des cases noires' },
+        { key: 'cellBackgroundColor', label: 'Couleur des cases blanches' },
         { key: 'arrowColor', label: 'Couleur des flèches' },
         { key: 'letterColor', label: 'Couleur des lettres (grille)' },
         { key: 'definitionTextColor', label: 'Couleur des définitions' },
@@ -251,6 +284,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                     </button>
                                     {showSetDropdown && (
                                         <div className="dropdown-content">
+                                            <button
+                                                className="tool-button full-width"
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowSetDropdown(false);
+                                                    setFileInput.current?.click();
+                                                }}
+                                            >
+                                                Importer un set local
+                                            </button>
                                             {gridSets.length > 0 ? (
                                                 gridSets.map((set) => (
                                                     <div

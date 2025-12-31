@@ -1,11 +1,12 @@
 .crossword-grid {
   flex: 2;
-  background-color: white;
+  background-color: var(--grid-cell-color, #fff);
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: auto;
   font-family: var(--ui-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif);
   border-radius: 0;
+  border: 1px solid var(--grid-border-color, #ccc);
 }
 
 .crossword-grid-container {
@@ -38,7 +39,7 @@
   font-family: var(--grid-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif);
   user-select: none;
   cursor: pointer;
-  background-color: white;
+  background-color: var(--grid-cell-color, #fff);
   transition: all 0.2s ease;
   box-sizing: border-box;
   color: var(--grid-letter-color, #000);

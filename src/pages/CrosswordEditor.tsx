@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CrosswordGrid } from '../components/grid/CrosswordGrid';
 import { Toolbar, type AppearanceSettings } from '../components/toolbar/Toolbar';
 import { useCrossword } from '../context/CrosswordContext';
@@ -100,7 +100,154 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
                 cells: [...currentCells]
             });
         }
+    });
+
+    return { definitionPlacements, arrowPlacements };
+};
+
+const renderGridCanvas = (
+    grid: Grid,
+    definitions: Record<string, WordDefinitionData>,
+    appearance: AppearanceSettings
+): HTMLCanvasElement => {
+    const cellSize = 36;
+    const canvas = document.createElement('canvas');
+    canvas.width = grid.size.width * cellSize;
+    canvas.height = grid.size.height * cellSize;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return canvas;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const { definitionPlacements, arrowPlacements } = buildPlacementsForGrid(grid, definitions);
+
+    const fitDefinitionSize = (text: string, slotCount: number) => {
+        const availableWidth = cellSize - 6;
+        const availableHeight = (cellSize - 6) / Math.max(1, slotCount) - 2;
+        const words = text.split(/\s+/).filter(Boolean);
+        const longestWord = words.reduce((max, w) => Math.max(max, w.length), 0);
+        const upperBound = Math.min(18, availableHeight, longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18);
+
+        for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
+            ctx.font = `${size}px ${appearance.definitionFont}`;
+            const spaceWidth = ctx.measureText(' ').width;
+            let lines = 1;
+            let width = 0;
+            let fits = true;
+            for (const word of words) {
+                const w = ctx.measureText(word).width;
+                if (w > availableWidth) {
+                    fits = false;
+                    break;
+                }
+                if (width === 0) {
+                    width = w;
+                } else if (width + spaceWidth + w <= availableWidth) {
+                    width += spaceWidth + w;
+                } else {
+                    lines += 1;
+                    if (lines * size * 1.1 > availableHeight) {
+                        fits = false;
+                        break;
+                    }
+                    width = w;
+                }
+            }
+
+            if (fits) return size;
+        }
+
+        return 4;
+    };
+
+    grid.cells.forEach((row, y) => {
+        row.forEach((cell, x) => {
+            const posX = x * cellSize;
+            const posY = y * cellSize;
+            if (cell.isBlack) {
+                ctx.fillStyle = appearance.blackCellColor;
+                ctx.fillRect(posX, posY, cellSize, cellSize);
+
+                const key = `${x}-${y}`;
+                const cellDefs = definitionPlacements[key];
+                if (cellDefs && cellDefs.length > 0) {
+                    const slots = cellDefs.length;
+                    cellDefs.forEach((def, index) => {
+                        const startY = posY + (cellSize / slots) * index;
+                        const areaHeight = cellSize / slots;
+                        const fontSize = fitDefinitionSize((def.definition || def.word).toUpperCase(), slots);
+                        ctx.fillStyle = appearance.definitionTextColor;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.font = `${fontSize}px ${appearance.definitionFont}`;
+
+                        const words = (def.definition || def.word).toUpperCase().split(/\s+/).filter(Boolean);
+                        const availableWidth = cellSize - 6;
+                        const lines: string[] = [];
+                        let current = '';
+
+                        words.forEach((word) => {
+                            const tentative = current ? `${current} ${word}` : word;
+                            if (ctx.measureText(tentative).width <= availableWidth) {
+                                current = tentative;
+                            } else {
+                                if (current) lines.push(current);
+                                current = word;
+                            }
+                        });
+                        if (current) lines.push(current);
+
+                        lines.forEach((line, lineIndex) => {
+                            ctx.fillText(line, posX + cellSize / 2, startY + areaHeight / 2 + (lineIndex - (lines.length - 1) / 2) * (fontSize * 1.1));
+                        });
+                    });
+
+                    if (cellDefs.length > 1) {
+                        ctx.strokeStyle = appearance.separatorColor;
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(posX, posY + cellSize / 2);
+                        ctx.lineTo(posX + cellSize, posY + cellSize / 2);
+                        ctx.stroke();
+                    }
+                }
+            } else {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(posX, posY, cellSize, cellSize);
+                if (cell.value) {
+                    ctx.fillStyle = appearance.letterColor;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = `${cellSize * 0.55}px ${appearance.gridFont}`;
+                    ctx.fillText(cell.value, posX + cellSize / 2, posY + cellSize / 2 + 1);
+                }
+            }
+        });
+    });
+
+    ctx.strokeStyle = appearance.borderColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= grid.size.width; x++) {
+        ctx.moveTo(x * cellSize + 0.5, 0);
+        ctx.lineTo(x * cellSize + 0.5, canvas.height);
     }
+    for (let y = 0; y <= grid.size.height; y++) {
+        ctx.moveTo(0, y * cellSize + 0.5);
+        ctx.lineTo(canvas.width, y * cellSize + 0.5);
+    }
+    ctx.stroke();
+
+    Object.entries(arrowPlacements).forEach(([key, arrows]) => {
+        const [targetX, targetY] = key.split('-').map(Number);
+        const centerX = targetX * cellSize + cellSize / 2;
+        const centerY = targetY * cellSize + cellSize / 2;
+        const offset = cellSize * 0.35;
+        ctx.fillStyle = appearance.arrowColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `${cellSize * 0.32}px ${appearance.gridFont}`;
 
     return positions;
 };
@@ -123,6 +270,7 @@ const buildEmptyGrid = (width: number, height: number) => {
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
     blackCellColor: '#000000',
+    cellBackgroundColor: '#ffffff',
     arrowColor: '#7a7a7a',
     letterColor: '#000000',
     definitionTextColor: '#f5f5f5',
@@ -342,6 +490,8 @@ const renderGridCanvas = (
         row.forEach((cell, x) => {
             const posX = x * cellSize;
             const posY = y * cellSize;
+            ctx.fillStyle = appearance.cellBackgroundColor;
+            ctx.fillRect(posX, posY, cellSize, cellSize);
             if (cell.isBlack) {
                 ctx.fillStyle = appearance.blackCellColor;
                 ctx.fillRect(posX, posY, cellSize, cellSize);
@@ -389,16 +539,12 @@ const renderGridCanvas = (
                         ctx.stroke();
                     }
                 }
-            } else {
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(posX, posY, cellSize, cellSize);
-                if (cell.value) {
-                    ctx.fillStyle = appearance.letterColor;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.font = `${cellSize * 0.55}px ${appearance.gridFont}`;
-                    ctx.fillText(cell.value, posX + cellSize / 2, posY + cellSize / 2 + 1);
-                }
+            } else if (cell.value) {
+                ctx.fillStyle = appearance.letterColor;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = `${cellSize * 0.55}px ${appearance.gridFont}`;
+                ctx.fillText(cell.value, posX + cellSize / 2, posY + cellSize / 2 + 1);
             }
         });
     });
@@ -452,10 +598,140 @@ const renderGridCanvas = (
     return canvas;
 };
 
-const loadJsPdf = async () => {
-    // @ts-ignore - chargement dynamique depuis un CDN pour éviter les dépendances locales
-    const mod: any = await import('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
-    return mod.jsPDF || (mod.default && mod.default.jsPDF) || mod.default;
+const dataUrlToUint8 = (dataUrl: string): Uint8Array => {
+    const base64 = dataUrl.split(',')[1];
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+};
+
+const escapePdfText = (text: string) => text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+
+type PdfPage = { width: number; height: number; dataUrl: string; label?: string };
+
+const buildPdfDocument = (pages: PdfPage[]) => {
+    const encoder = new TextEncoder();
+    const chunks: (string | Uint8Array)[] = ['%PDF-1.4\n'];
+    const offsets: Record<number, number> = {};
+    const byteLength = () =>
+        chunks.reduce((total, chunk) => total + (typeof chunk === 'string' ? encoder.encode(chunk).length : chunk.length), 0);
+
+    const writeObject = (id: number, content: string) => {
+        offsets[id] = byteLength();
+        chunks.push(`${id} 0 obj\n${content}\nendobj\n`);
+    };
+
+    const writeStream = (id: number, dict: string, data: Uint8Array) => {
+        offsets[id] = byteLength();
+        chunks.push(`${id} 0 obj\n${dict}\nstream\n`);
+        chunks.push(data);
+        chunks.push('\nendstream\nendobj\n');
+    };
+
+    const needsFont = pages.some((page) => page.label);
+    const catalogId = 1;
+    const pagesId = 2;
+    const fontId = needsFont ? 3 : null;
+    let nextId = needsFont ? 4 : 3;
+
+    const preparedPages = pages.map((page, index) => {
+        const imageId = nextId++;
+        const contentId = nextId++;
+        const pageId = nextId++;
+        const mediaHeight = page.height + (page.label ? 28 : 0);
+        const name = `Im${index}`;
+        return { ...page, index, imageId, contentId, pageId, mediaHeight, name };
+    });
+
+    if (fontId) {
+        writeObject(fontId, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    }
+
+    preparedPages.forEach((page) => {
+        const imageBytes = dataUrlToUint8(page.dataUrl);
+        writeStream(
+            page.imageId,
+            `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>`,
+            imageBytes
+        );
+
+        const lines = [
+            'q',
+            `${page.width} 0 0 ${page.height} 0 ${page.label ? 0 : 0} cm`,
+            `/${page.name} Do`,
+            'Q'
+        ];
+
+        if (page.label) {
+            const y = page.mediaHeight - 14;
+            lines.push('BT');
+            lines.push('/F1 12 Tf');
+            lines.push(`12 ${y.toFixed(2)} Td`);
+            lines.push(`(${escapePdfText(page.label)}) Tj`);
+            lines.push('ET');
+        }
+
+        const contentBytes = encoder.encode(lines.join('\n'));
+        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
+
+        const resourcesParts = [
+            `/XObject << /${page.name} ${page.imageId} 0 R >>`,
+            `/ProcSet [ /PDF ${fontId ? '/Text ' : ''}/ImageC ]`
+        ];
+
+        if (fontId) {
+            resourcesParts.push(`/Font << /F1 ${fontId} 0 R >>`);
+        }
+
+        writeObject(
+            page.pageId,
+            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${`<< ${resourcesParts.join(' ')} >>`} /MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`
+        );
+    });
+
+    writeObject(
+        pagesId,
+        `<< /Type /Pages /Count ${preparedPages.length} /Kids [${preparedPages
+            .map((page) => `${page.pageId} 0 R`)
+            .join(' ')}] >>`
+    );
+    writeObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+
+    const xrefStart = byteLength();
+    chunks.push(`xref\n0 ${nextId}\n`);
+    chunks.push('0000000000 65535 f \n');
+    for (let i = 1; i < nextId; i++) {
+        const offset = offsets[i] ?? 0;
+        chunks.push(`${offset.toString().padStart(10, '0')} 00000 n \n`);
+    }
+    chunks.push(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+
+    const total = byteLength();
+    const buffer = new Uint8Array(total);
+    let cursor = 0;
+    chunks.forEach((chunk) => {
+        if (typeof chunk === 'string') {
+            const encoded = encoder.encode(chunk);
+            buffer.set(encoded, cursor);
+            cursor += encoded.length;
+        } else {
+            buffer.set(chunk, cursor);
+            cursor += chunk.length;
+        }
+    });
+
+    return new Blob([buffer], { type: 'application/pdf' });
+};
+
+const downloadPdf = (pages: PdfPage[], filename: string) => {
+    const blob = buildPdfDocument(pages);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
 };
 
 const serializeSet = (set: GridSet, appearance: AppearanceSettings) => {
@@ -477,7 +753,7 @@ const serializeSet = (set: GridSet, appearance: AppearanceSettings) => {
 
 const deserializeSet = (raw: string): { set: GridSet; appearance: AppearanceSettings } => {
     const parsed = JSON.parse(raw);
-    const appearance = parsed.a || DEFAULT_APPEARANCE;
+    const appearance = { ...DEFAULT_APPEARANCE, ...(parsed.a || {}) };
     const set: GridSet = {
         id: parsed.i || Date.now().toString(),
         name: parsed.n || 'Set importé',
@@ -500,6 +776,7 @@ export const CrosswordEditor: React.FC = () => {
     const { state, dispatch } = useCrossword();
     const [isToolbarInputActive, setIsToolbarInputActive] = useState(false);
     const gridAreaRef = React.useRef<HTMLDivElement | null>(null);
+    const dialogSetFileInput = useRef<HTMLInputElement | null>(null);
     const [selectedWord, setSelectedWord] = useState<string | null>(null);
     const [wordDefinitions, setWordDefinitions] = useState<Record<string, WordDefinitionData>>({});
     const [placementTargetWord, setPlacementTargetWord] = useState<string | null>(null);
@@ -511,7 +788,7 @@ export const CrosswordEditor: React.FC = () => {
                 const parsed: GridSet[] = JSON.parse(storedSets);
                 return parsed.map((set) => ({
                     ...set,
-                    appearance: set.appearance || DEFAULT_APPEARANCE
+                    appearance: { ...DEFAULT_APPEARANCE, ...(set.appearance || {}) }
                 }));
             } catch (error) {
                 console.warn('Impossible de lire les sets sauvegardés', error);
@@ -561,6 +838,7 @@ export const CrosswordEditor: React.FC = () => {
     const appearanceVars = useMemo(
         () => ({
             ['--grid-black-color' as string]: appearance.blackCellColor,
+            ['--grid-cell-color' as string]: appearance.cellBackgroundColor,
             ['--grid-arrow-color' as string]: appearance.arrowColor,
             ['--grid-letter-color' as string]: appearance.letterColor,
             ['--grid-definition-color' as string]: appearance.definitionTextColor,
@@ -587,7 +865,7 @@ export const CrosswordEditor: React.FC = () => {
         if (current) {
             setSavedGrids(current.grids);
             setCurrentSetName(current.name);
-            setAppearance(current.appearance || DEFAULT_APPEARANCE);
+            setAppearance({ ...DEFAULT_APPEARANCE, ...(current.appearance || {}) });
         }
     }, [gridSets, currentSetId]);
 
@@ -630,10 +908,28 @@ export const CrosswordEditor: React.FC = () => {
         setCurrentSetId(id);
         setCurrentSetName(target.name);
         setSavedGrids(target.grids);
-        setAppearance(target.appearance || DEFAULT_APPEARANCE);
+        setAppearance({ ...DEFAULT_APPEARANCE, ...(target.appearance || {}) });
         resetEditingState();
         setShowSetDialog(false);
     }, [gridSets, resetEditingState]);
+
+    const handleDeleteSet = useCallback(
+        (id: string) => {
+            if (!window.confirm('Supprimer ce set de grilles ?')) return;
+            setGridSets((prev) => prev.filter((set) => set.id !== id));
+
+            if (currentSetId === id) {
+                const size = state.currentGrid?.size || { width: 15, height: 15 };
+                setCurrentSetId(null);
+                setCurrentSetName('Nouveau set');
+                setSavedGrids([]);
+                setAppearance(DEFAULT_APPEARANCE);
+                dispatch({ type: 'LOAD_GRID', payload: buildEmptyGrid(size.width, size.height) });
+                setShowSetDialog(true);
+            }
+        },
+        [currentSetId, dispatch, state.currentGrid]
+    );
 
     const handleCreateNewSet = useCallback((nameOverride?: string) => {
         const name = (nameOverride ?? newSetName).trim() || 'Nouveau set';
@@ -671,20 +967,21 @@ export const CrosswordEditor: React.FC = () => {
         }
         try {
             const canvas = renderGridCanvas(state.currentGrid, filteredDefinitions, appearance);
-            const orientation = state.currentGrid.size.width >= state.currentGrid.size.height ? 'landscape' : 'portrait';
-            const JsPdf = await loadJsPdf();
-            const pdf = new JsPdf({
-                orientation,
-                unit: 'px',
-                format: [canvas.width, canvas.height]
-            });
-            const img = canvas.toDataURL('image/png');
-            pdf.addImage(img, 'PNG', 0, 0, canvas.width, canvas.height);
-            const gridName = (state.currentGrid.name || 'grille').replace(/\s+/g, '_').toLowerCase();
-            pdf.save(`${gridName || 'grille'}.pdf`);
+            const gridName = (state.currentGrid.name || 'grille').trim() || 'grille';
+            downloadPdf(
+                [
+                    {
+                        width: canvas.width,
+                        height: canvas.height,
+                        dataUrl: canvas.toDataURL('image/jpeg', 0.92),
+                        label: gridName
+                    }
+                ],
+                `${gridName.replace(/\s+/g, '_').toLowerCase()}.pdf`
+            );
         } catch (error) {
             console.error('Export PDF', error);
-            window.alert('Export PDF impossible sans connexion au CDN jsPDF.');
+            window.alert('Export PDF impossible : impossible de générer le fichier localement.');
         }
     }, [appearance, filteredDefinitions, state.currentGrid]);
 
@@ -701,32 +998,21 @@ export const CrosswordEditor: React.FC = () => {
         }
 
         try {
-            const JsPdf = await loadJsPdf();
-            const pdf = new JsPdf({ orientation: 'portrait', unit: 'px' });
-            let isFirst = true;
-            targets.forEach((entry) => {
+            const pages: PdfPage[] = targets.map((entry) => {
                 const canvas = renderGridCanvas(entry.grid, entry.definitions || {}, appearance);
-                const pageWidth = pdf.internal.pageSize.getWidth();
-                const pageHeight = pdf.internal.pageSize.getHeight();
-                const scale = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
-                const renderWidth = canvas.width * scale;
-                const renderHeight = canvas.height * scale;
-                const offsetX = (pageWidth - renderWidth) / 2;
-                const offsetY = (pageHeight - renderHeight) / 2;
-
-                if (!isFirst) pdf.addPage();
-                isFirst = false;
-                pdf.setFontSize(12);
-                pdf.text(entry.name, 12, 16);
-                const imgData = canvas.toDataURL('image/png');
-                pdf.addImage(imgData, 'PNG', offsetX, offsetY, renderWidth, renderHeight);
+                return {
+                    width: canvas.width,
+                    height: canvas.height,
+                    dataUrl: canvas.toDataURL('image/jpeg', 0.92),
+                    label: entry.name
+                };
             });
 
             const setLabel = (currentSetName || 'set').replace(/\s+/g, '_').toLowerCase();
-            pdf.save(`${setLabel}-grilles.pdf`);
+            downloadPdf(pages, `${setLabel}-grilles.pdf`);
         } catch (error) {
             console.error('Export set PDF', error);
-            window.alert('Export PDF impossible sans connexion au CDN jsPDF.');
+            window.alert('Export PDF impossible : impossible de générer le fichier localement.');
         }
     }, [appearance, currentSetName, filteredDefinitions, savedGrids, state.currentGrid]);
 
@@ -751,7 +1037,7 @@ export const CrosswordEditor: React.FC = () => {
                 setCurrentSetId(normalizedId);
                 setCurrentSetName(normalizedSet.name);
                 setSavedGrids(normalizedSet.grids || []);
-                setAppearance(importedAppearance || DEFAULT_APPEARANCE);
+                setAppearance({ ...DEFAULT_APPEARANCE, ...(importedAppearance || {}) });
                 setShowSetDialog(false);
             } catch (error) {
                 console.error('Import set error', error);
@@ -760,6 +1046,17 @@ export const CrosswordEditor: React.FC = () => {
         },
         [gridSets]
     );
+
+    const readSetFile = useCallback((file?: File | null) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const content = typeof reader.result === 'string' ? reader.result : '';
+            handleImportSetData(content);
+        };
+        reader.onerror = () => window.alert('Impossible de lire ce fichier.');
+        reader.readAsText(file);
+    }, [handleImportSetData]);
     
     const handleCellUpdate = useCallback((x: number, y: number, changes: Partial<Cell>) => {
         if (!state.currentGrid?.cells[y]?.[x]) return;
@@ -1120,20 +1417,48 @@ export const CrosswordEditor: React.FC = () => {
                             <button className="action-button" onClick={() => handleCreateNewSet(newSetName)}>
                                 Nouveau set de grille
                             </button>
+                            <button
+                                className="tool-button"
+                                type="button"
+                                onClick={() => dialogSetFileInput.current?.click()}
+                            >
+                                Charger un set local
+                            </button>
                         </div>
                         <div className="dialog-section">
                             <label className="input-label">Charger un set existant</label>
                             <div className="dialog-set-list">
                                 {gridSets.length > 0 ? (
                                     gridSets.map((set) => (
-                                        <button
+                                        <div
                                             key={set.id}
                                             className={`saved-grid-item ${set.id === currentSetId ? 'active' : ''}`}
+                                            role="button"
+                                            tabIndex={0}
                                             onClick={() => handleSelectSet(set.id)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter' || event.key === ' ') {
+                                                    event.preventDefault();
+                                                    handleSelectSet(set.id);
+                                                }
+                                            }}
                                         >
-                                            <div>{set.name}</div>
-                                            <small>{set.grids.length} grilles</small>
-                                        </button>
+                                            <div className="saved-grid-labels">
+                                                <div>{set.name}</div>
+                                                <small>{set.grids.length} grilles</small>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="tool-button"
+                                                onClick={(event) => {
+                                                    event.preventDefault();
+                                                    event.stopPropagation();
+                                                    handleDeleteSet(set.id);
+                                                }}
+                                            >
+                                                Supprimer
+                                            </button>
+                                        </div>
                                     ))
                                 ) : (
                                     <div className="no-grids">Aucun set disponible</div>
@@ -1148,6 +1473,17 @@ export const CrosswordEditor: React.FC = () => {
                     </div>
                 </div>
             )}
+            <input
+                ref={dialogSetFileInput}
+                type="file"
+                accept=".json,.txt"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    readSetFile(file);
+                    e.target.value = '';
+                }}
+            />
             <Toolbar
                 onResize={handleResize}
                 currentGrid={state.currentGrid}
