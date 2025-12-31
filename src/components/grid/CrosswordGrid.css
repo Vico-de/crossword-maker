@@ -5,6 +5,7 @@
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: auto;
+  font-family: var(--ui-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif);
 }
 
 .crossword-grid-container {
@@ -30,10 +31,13 @@
   position: relative;
   font-size: 20px;
   font-weight: bold;
+  font-family: var(--grid-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif);
   user-select: none;
   cursor: pointer;
   background-color: white;
   transition: all 0.2s ease;
+  box-sizing: border-box;
+  color: var(--grid-letter-color, #000);
 }
 
 .grid-cell:hover {
@@ -50,13 +54,12 @@
 }
 
 .grid-cell.black {
-  background-color: #333;
-  color: #f5f5f5;
+  background-color: var(--grid-black-color, #000);
+  color: var(--grid-letter-color, #f5f5f5);
   font-size: 10px;
   padding: 0;
   position: relative;
   overflow: hidden;
-  box-sizing: border-box;
 }
 
 .definition-markers {
@@ -69,6 +72,7 @@
   text-align: center;
   gap: 0;
   position: relative;
+  font-family: var(--definition-font-family, var(--grid-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif));
 }
 
 .definition-markers.multiple {
@@ -90,11 +94,11 @@
 .definition-markers.multiple::after {
   content: '';
   position: absolute;
-  left: 4px;
-  right: 4px;
+  left: 0;
+  right: 0;
   top: 50%;
   height: 1px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.9);
   pointer-events: none;
 }
 
@@ -102,9 +106,10 @@
   font-size: var(--fit-size, 10px);
   line-height: 1.05;
   width: 100%;
-  white-space: normal;
+  white-space: pre-wrap;
   word-break: break-word;
   overflow: hidden;
+  color: var(--grid-letter-color, #f5f5f5);
 }
 
 .arrow-markers {
@@ -122,7 +127,7 @@
   justify-content: center;
   background: transparent;
   border-radius: 0;
-  color: #1976d2;
+  color: var(--grid-arrow-color, #666);
   font-size: 12px;
   box-shadow: none;
 }
@@ -164,27 +169,27 @@
 }
 
 .arrow-marker.attach-left {
-  left: 0;
+  left: 2px;
   top: 50%;
-  transform: translate(-60%, -50%);
+  transform: translate(0, -50%);
 }
 
 .arrow-marker.attach-right {
-  right: 0;
+  right: 2px;
   top: 50%;
-  transform: translate(60%, -50%);
+  transform: translate(0, -50%);
 }
 
 .arrow-marker.attach-top {
-  top: 0;
+  top: 2px;
   left: 50%;
-  transform: translate(-50%, -60%);
+  transform: translate(-50%, 0);
 }
 
 .arrow-marker.attach-bottom {
-  bottom: 0;
+  bottom: 2px;
   left: 50%;
-  transform: translate(-50%, 60%);
+  transform: translate(-50%, 0);
 }
 
 .grid-cell .cell-number {

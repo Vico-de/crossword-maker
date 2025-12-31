@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { CrosswordGrid } from '../components/grid/CrosswordGrid';
-import { Toolbar } from '../components/toolbar/Toolbar';
+import { Toolbar, type AppearanceSettings } from '../components/toolbar/Toolbar';
 import { useCrossword } from '../context/CrosswordContext';
 import type { Cell } from '../models/types';
 import './CrosswordEditor.css';
@@ -115,12 +115,31 @@ export const CrosswordEditor: React.FC = () => {
         };
     }>>({});
     const [placementTargetWord, setPlacementTargetWord] = useState<string | null>(null);
+    const [appearance, setAppearance] = useState<AppearanceSettings>({
+        blackCellColor: '#000000',
+        arrowColor: '#7a7a7a',
+        letterColor: '#000000',
+        gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
+        definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
+    });
     // Supprimez la ligne avec setIsSaveDialogOpen si elle existe
 
     const wordPositions = useMemo(() => {
         if (!state.currentGrid) return [];
         return extractWordPositions(state.currentGrid.cells);
     }, [state.currentGrid]);
+
+    const appearanceVars = useMemo(
+        () => ({
+            ['--grid-black-color' as string]: appearance.blackCellColor,
+            ['--grid-arrow-color' as string]: appearance.arrowColor,
+            ['--grid-letter-color' as string]: appearance.letterColor,
+            ['--grid-font-family' as string]: appearance.gridFont,
+            ['--definition-font-family' as string]: appearance.definitionFont,
+            ['--ui-font-family' as string]: appearance.gridFont
+        }),
+        [appearance]
+    );
     
     const handleCellUpdate = useCallback((x: number, y: number, changes: Partial<Cell>) => {
         if (!state.currentGrid?.cells[y]?.[x]) return;
@@ -286,6 +305,10 @@ export const CrosswordEditor: React.FC = () => {
 
     const handleResize = (width: number, height: number) => {
         dispatch({ type: 'RESIZE_GRID', payload: { width, height } });
+    };
+
+    const handleAppearanceChange = (changes: Partial<AppearanceSettings>) => {
+        setAppearance((prev) => ({ ...prev, ...changes }));
     };
 
     const toggleDirection = () => {
@@ -499,11 +522,13 @@ export const CrosswordEditor: React.FC = () => {
     }, [selectedWord, wordPositions, wordDefinitions, state.currentGrid]);
 
     return (
-        <div className="crossword-editor" onMouseDown={handleOutsideClick}>
+        <div className="crossword-editor" onMouseDown={handleOutsideClick} style={appearanceVars}>
             <Toolbar
                 onResize={handleResize}
                 currentGrid={state.currentGrid}
                 onInputFocus={setIsToolbarInputActive}
+                appearance={appearance}
+                onAppearanceChange={handleAppearanceChange}
             />
             <div className="editor-container">
                 <div className="editor-main">
