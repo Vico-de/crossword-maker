@@ -71,3 +71,16 @@ export default defineConfig([
   },
 ])
 ```
+
+## Resolving GitHub merge conflicts
+
+If GitHub blocks a merge because the branch is out of date or has conflicts, you can refresh the branch locally and push the resolution:
+
+1. Fetch the latest main branch: `git fetch origin` then `git switch main` and `git pull`.
+2. Update your feature branch: `git switch work` and either `git merge origin/main` or `git rebase origin/main`.
+3. When Git reports conflicts, open the listed files and keep the desired code between the `<<<<<<<`, `=======`, and `>>>>>>>` markers, then remove the markers.
+4. After fixing conflicts, run `npm run build` to ensure the app still compiles.
+5. Commit the resolved files and push: `git add <files>`, `git commit -m "Resolve merge conflicts"`, then `git push origin work`.
+6. Re-open the pull request; GitHub should show the conflicts cleared.
+
+These steps keep the branch aligned with main and unblock the pull request.
