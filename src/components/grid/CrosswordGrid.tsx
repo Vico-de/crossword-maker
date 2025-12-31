@@ -3,6 +3,20 @@ import React from 'react';
 import type { Cell as CellType } from '../../models/types';
 import './CrosswordGrid.css';
 
+type DefinitionDirection = 'up' | 'down' | 'left' | 'right';
+
+interface DefinitionMarker {
+    word: string;
+    definition?: string;
+}
+
+interface ArrowMarker {
+    direction: DefinitionDirection;
+    variant?: 'straight' | 'curved-right' | 'curved-left';
+    from: { x: number; y: number };
+    attachment?: 'left' | 'right' | 'top' | 'bottom';
+}
+
 interface CellProps {
     value: string;
     isBlack: boolean;
@@ -10,15 +24,33 @@ interface CellProps {
     x: number;
     y: number;
     isHighlighted?: boolean;
+    definitions?: DefinitionMarker[];
+    arrows?: ArrowMarker[];
     onClick: () => void;
     onChange: (changes: Partial<CellType>) => void;
 }
+
+const BASE_CELL_SIZE = 40;
+
+const computeFitFontSize = (text: string, slotCount: number) => {
+    const safeLength = Math.max(1, text.length);
+    const availableWidth = (BASE_CELL_SIZE - 4) / Math.max(1, slotCount);
+    const availableHeight = BASE_CELL_SIZE - 4;
+
+    const sizeFromWidth = availableWidth / safeLength;
+    const sizeFromHeight = availableHeight * 0.85;
+    const fitted = Math.min(sizeFromWidth, sizeFromHeight, 18);
+
+    return Math.max(6, fitted);
+};
 
 const CrosswordCell: React.FC<CellProps> = ({
     value,
     isBlack,
     isSelected,
     isHighlighted,
+    definitions,
+    arrows,
     onClick,
     onChange
 }) => {
@@ -26,12 +58,57 @@ const CrosswordCell: React.FC<CellProps> = ({
         isSelected ? 'selected' : ''
     } ${isHighlighted ? 'highlighted' : ''}`;
 
+    const containerLayout = React.useMemo(() => {
+        if (!definitions || definitions.length < 2) return '';
+        return 'multiple';
+    }, [definitions]);
+
+    const slotCount = definitions?.length ?? 1;
+
     return (
         <div
             className={cellClassName}
             onClick={onClick}
         >
             {!isBlack && value}
+            {isBlack && definitions && definitions.length > 0 && (
+                <div className={`definition-markers ${containerLayout}`}>
+                    {definitions.map((definition, index) => (
+                        <div
+                            key={`${definition.word}-${index}`}
+                            className="definition-marker"
+                        >
+                            <span
+                                className="definition-text"
+                                style={{
+                                    ['--fit-size' as string]: `${computeFitFontSize(
+                                        definition.definition || definition.word,
+                                        slotCount
+                                    )}px`
+                                }}
+                            >
+                                {definition.definition || definition.word}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {!isBlack && arrows && arrows.length > 0 && (
+                <div className="arrow-markers">
+                    {arrows.map((arrow, index) => (
+                        <span
+                            key={`${arrow.direction}-${index}`}
+                            className={`arrow-marker arrow-${arrow.direction} ${
+                                arrow.variant === 'straight'
+                                    ? ''
+                                    : arrow.variant === 'curved-left'
+                                      ? 'curved-left'
+                                      : 'curved-right'
+                            } ${arrow.attachment ? `attach-${arrow.attachment}` : ''}`}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
@@ -43,6 +120,10 @@ interface CrosswordGridProps {
     selectedCell: { x: number; y: number } | null;
     selectedDirection: 'horizontal' | 'vertical';
     onDirectionChange: () => void;
+    highlightedCells?: Set<string>;
+    definitionPlacements?: Record<string, DefinitionMarker[]>;
+    arrowPlacements?: Record<string, ArrowMarker[]>;
+    onBlackCellClick?: (x: number, y: number) => void;
 }
 
 export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
@@ -51,7 +132,11 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
     onCellUpdate,
     selectedCell,
     selectedDirection,
-    onDirectionChange
+    onDirectionChange,
+    highlightedCells,
+    definitionPlacements,
+    arrowPlacements,
+    onBlackCellClick
 }) => {
     return (
         <div className="crossword-grid-container">
@@ -72,7 +157,15 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
                                 x={x}
                                 y={y}
                                 isSelected={selectedCell?.x === x && selectedCell?.y === y}
-                                onClick={() => onCellClick(x, y)}
+                                isHighlighted={highlightedCells?.has(`${x}-${y}`)}
+                                definitions={definitionPlacements?.[`${x}-${y}`]}
+                                arrows={arrowPlacements?.[`${x}-${y}`]}
+                                onClick={() => {
+                                    onCellClick(x, y);
+                                    if (cell.isBlack && onBlackCellClick) {
+                                        onBlackCellClick(x, y);
+                                    }
+                                }}
                                 onChange={(changes) => onCellUpdate(x, y, changes)}
                             />
                         ))}
