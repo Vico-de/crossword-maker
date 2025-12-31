@@ -3,6 +3,14 @@ import React from 'react';
 import type { Cell as CellType } from '../../models/types';
 import './CrosswordGrid.css';
 
+type DefinitionDirection = 'up' | 'down' | 'left' | 'right';
+
+interface DefinitionMarker {
+    word: string;
+    definition?: string;
+    direction: DefinitionDirection;
+}
+
 interface CellProps {
     value: string;
     isBlack: boolean;
@@ -10,15 +18,24 @@ interface CellProps {
     x: number;
     y: number;
     isHighlighted?: boolean;
+    definitions?: DefinitionMarker[];
     onClick: () => void;
     onChange: (changes: Partial<CellType>) => void;
 }
+
+const directionSymbol: Record<DefinitionDirection, string> = {
+    up: '↑',
+    down: '↓',
+    left: '←',
+    right: '→'
+};
 
 const CrosswordCell: React.FC<CellProps> = ({
     value,
     isBlack,
     isSelected,
     isHighlighted,
+    definitions,
     onClick,
     onChange
 }) => {
@@ -26,12 +43,35 @@ const CrosswordCell: React.FC<CellProps> = ({
         isSelected ? 'selected' : ''
     } ${isHighlighted ? 'highlighted' : ''}`;
 
+    const containerLayout = React.useMemo(() => {
+        if (!definitions || definitions.length < 2) return '';
+        const hasHorizontal = definitions.some(def => def.direction === 'left' || def.direction === 'right');
+        const hasVertical = definitions.some(def => def.direction === 'up' || def.direction === 'down');
+
+        if (hasHorizontal && !hasVertical) return 'split-vertical';
+        if (hasVertical && !hasHorizontal) return 'split-horizontal';
+        return 'split-mixed';
+    }, [definitions]);
+
     return (
         <div
             className={cellClassName}
             onClick={onClick}
         >
             {!isBlack && value}
+            {isBlack && definitions && definitions.length > 0 && (
+                <div className={`definition-markers ${containerLayout}`}>
+                    {definitions.map((definition, index) => (
+                        <div
+                            key={`${definition.word}-${index}`}
+                            className={`definition-marker direction-${definition.direction}`}
+                        >
+                            <span className="arrow">{directionSymbol[definition.direction]}</span>
+                            <span className="definition-text">{definition.definition || definition.word}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
@@ -43,6 +83,9 @@ interface CrosswordGridProps {
     selectedCell: { x: number; y: number } | null;
     selectedDirection: 'horizontal' | 'vertical';
     onDirectionChange: () => void;
+    highlightedCells?: Set<string>;
+    definitionPlacements?: Record<string, DefinitionMarker[]>;
+    onBlackCellClick?: (x: number, y: number) => void;
 }
 
 export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
@@ -51,7 +94,10 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
     onCellUpdate,
     selectedCell,
     selectedDirection,
-    onDirectionChange
+    onDirectionChange,
+    highlightedCells,
+    definitionPlacements,
+    onBlackCellClick
 }) => {
     return (
         <div className="crossword-grid-container">
@@ -72,7 +118,14 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
                                 x={x}
                                 y={y}
                                 isSelected={selectedCell?.x === x && selectedCell?.y === y}
-                                onClick={() => onCellClick(x, y)}
+                                isHighlighted={highlightedCells?.has(`${x}-${y}`)}
+                                definitions={definitionPlacements?.[`${x}-${y}`]}
+                                onClick={() => {
+                                    onCellClick(x, y);
+                                    if (cell.isBlack && onBlackCellClick) {
+                                        onBlackCellClick(x, y);
+                                    }
+                                }}
                                 onChange={(changes) => onCellUpdate(x, y, changes)}
                             />
                         ))}
