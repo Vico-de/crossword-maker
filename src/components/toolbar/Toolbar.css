@@ -5,6 +5,7 @@
     width: 100%;
     background: #f5f5f5;
     border-bottom: 1px solid #ddd;
+    font-family: var(--ui-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif);
 }
 
 .toolbar-buttons {
@@ -13,6 +14,20 @@
     padding: 8px;
     background: #fff;
     border-bottom: 1px solid #ddd;
+}
+
+.toolbar-status {
+    display: flex;
+    gap: 12px;
+    padding: 6px 12px;
+    background: #f9f9f9;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+    color: #444;
+}
+
+.status-item {
+    font-weight: 600;
 }
 
 /* Style de base pour tous les boutons */
@@ -62,6 +77,24 @@
     display: flex;
     gap: 16px;
     align-items: center;
+    flex-wrap: wrap;
+}
+
+.tool-panel.info-panel {
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.set-column, .grid-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 280px;
+}
+
+.set-column .action-group,
+.grid-column .action-group {
+    gap: 8px;
 }
 
 /* Inputs */
@@ -87,6 +120,47 @@
     gap: 8px;
 }
 
+.appearance-panel {
+    align-items: flex-start;
+}
+
+.color-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 220px;
+}
+
+.color-inputs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.custom-font-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+}
+
+.color-text-input {
+    composes: input-base;
+    min-width: 150px;
+}
+
+.font-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 220px;
+}
+
+.font-select {
+    composes: input-base;
+    padding: 8px;
+}
+
 /* Dropdown pour le chargement */
 .load-dropdown {
     position: relative;
@@ -106,6 +180,13 @@
     z-index: 1000;
 }
 
+.dropdown-content .full-width {
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
 .saved-grid-item {
     padding: 8px 16px;
     border-bottom: 1px solid #eee;
@@ -113,6 +194,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.saved-grid-item.active {
+    background: #e8f2ff;
+    border-color: #c5dafc;
 }
 
 .saved-grid-item:hover {
