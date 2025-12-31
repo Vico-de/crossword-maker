@@ -1,5 +1,7 @@
 # Crossword Maker
 
+Démo en ligne : https://vico-de.github.io/crossword-maker/
+
 Éditeur de grilles de mots croisés avec gestion de sets, définitions et apparence personnalisable.
 
 ## Démarrer

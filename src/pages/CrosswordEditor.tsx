@@ -11,6 +11,10 @@ import type {
     WordDefinitionPlacement
 } from '../models/types';
 import './CrosswordEditor.css';
+
+// -----------------------------------------------------------------------------
+// Types et helpers transverses
+// -----------------------------------------------------------------------------
 type WordDirection = 'horizontal' | 'vertical';
 
 interface WordPosition {
@@ -97,41 +101,7 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
                 cells: [...currentCells]
             });
         }
-
-        const contentBytes = encoder.encode(lines.join('\n'));
-        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
-
-        const resourcesParts = [
-            `/XObject << /${page.name} ${page.imageId} 0 R >>`,
-            `/ProcSet [ /PDF ${fontId ? '/Text ' : ''}/ImageC ]`
-        ];
-
-        if (fontId) {
-            resourcesParts.push(`/Font << /F1 ${fontId} 0 R >>`);
-        }
-
-        writeObject(
-            page.pageId,
-            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${`<< ${resourcesParts.join(' ')} >>`} /MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`
-        );
-    });
-
-    writeObject(
-        pagesId,
-        `<< /Type /Pages /Count ${preparedPages.length} /Kids [${preparedPages
-            .map((page) => `${page.pageId} 0 R`)
-            .join(' ')}] >>`
-    );
-    writeObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
-
-    const xrefStart = byteLength();
-    chunks.push(`xref\n0 ${nextId}\n`);
-    chunks.push('0000000000 65535 f \n');
-    for (let i = 1; i < nextId; i++) {
-        const offset = offsets[i] ?? 0;
-        chunks.push(`${offset.toString().padStart(10, '0')} 00000 n \n`);
     }
-    chunks.push(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
 
     return positions;
 };
@@ -226,6 +196,10 @@ const unpackDefinitions = (packed: PackedDefinition[]): Record<string, WordDefin
     });
     return result;
 };
+
+// -----------------------------------------------------------------------------
+// Sérialisation / désérialisation des grilles et définitions pour les sets
+// -----------------------------------------------------------------------------
 
 // Sérialise la grille en notation compacte (lettre, # pour noire, . pour vide).
 const packGrid = (grid: Grid) => ({
@@ -326,7 +300,10 @@ const renderGridCanvas = (
     appearance: AppearanceSettings,
     scale = 2
 ): HTMLCanvasElement => {
-    // Canvas haute résolution pour des exports PDF nets sans dépendance externe.
+// -----------------------------------------------------------------------------
+// Export PDF : rendu canvas + sérialisation PDF minimaliste
+// -----------------------------------------------------------------------------
+// Canvas haute résolution pour des exports PDF nets sans dépendance externe.
     const baseCell = 40;
     const canvas = document.createElement('canvas');
     const boardWidth = grid.size.width * baseCell;
@@ -649,6 +626,7 @@ const serializeSet = (set: GridSet, appearance: AppearanceSettings) => {
     return JSON.stringify(payload);
 };
 
+// Restaure un set sérialisé (local ou importé) en objets complets.
 const deserializeSet = (raw: string): { set: GridSet; appearance: AppearanceSettings } => {
     const parsed = JSON.parse(raw);
     const appearance = { ...DEFAULT_APPEARANCE, ...(parsed.a || {}) };
@@ -670,6 +648,9 @@ const deserializeSet = (raw: string): { set: GridSet; appearance: AppearanceSett
     return { set, appearance };
 };
 
+// -----------------------------------------------------------------------------
+// Composant principal : gestion des états, des sauvegardes et du rendu.
+// -----------------------------------------------------------------------------
 export const CrosswordEditor: React.FC = () => {
     const { state, dispatch } = useCrossword();
     const [isToolbarInputActive, setIsToolbarInputActive] = useState(false);
