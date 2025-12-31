@@ -36,12 +36,37 @@ const computeFitFontSize = (text: string, slotCount: number) => {
     const availableWidth = BASE_CELL_SIZE - 6;
     const availableHeight = (BASE_CELL_SIZE - 6) / Math.max(1, slotCount) - 2;
 
-    for (let size = 18; size >= 6; size -= 1) {
-        const approxCharsPerLine = Math.max(1, Math.floor(availableWidth / (0.55 * size)));
-        const lines = Math.max(1, Math.ceil(text.length / approxCharsPerLine));
-        const totalHeight = lines * size * 1.05;
+    const lineCountForSize = (size: number) => {
+        const words = text.split(/\s+/).filter(Boolean);
+        if (words.length === 0) return 1;
 
-        if (totalHeight <= availableHeight) {
+        const charWidth = 0.55 * size;
+        const maxLineWidth = availableWidth;
+        let currentLineWidth = 0;
+        let lines = 1;
+
+        for (const word of words) {
+            const wordWidth = word.length * charWidth;
+            if (wordWidth > maxLineWidth) return Number.POSITIVE_INFINITY;
+
+            if (currentLineWidth === 0) {
+                currentLineWidth = wordWidth;
+            } else if (currentLineWidth + charWidth + wordWidth <= maxLineWidth) {
+                currentLineWidth += charWidth + wordWidth;
+            } else {
+                lines += 1;
+                currentLineWidth = wordWidth;
+            }
+        }
+
+        return lines;
+    };
+
+    for (let size = 18; size >= 6; size -= 1) {
+        const lines = lineCountForSize(size);
+        const totalHeight = lines * size * 1.1;
+
+        if (lines !== Number.POSITIVE_INFINITY && totalHeight <= availableHeight) {
             return size;
         }
     }
@@ -74,6 +99,9 @@ const CrosswordCell: React.FC<CellProps> = ({
             {isBlack && definitions && definitions.length > 0 && (
                 <div className={`definition-markers ${definitions.length > 1 ? 'multiple' : ''}`}>
                     {definitions.map((definition, index) => (
+                        (() => {
+                            const markerText = (definition.definition || definition.word).toUpperCase();
+                            return (
                         <div
                             key={`${definition.word}-${index}`}
                             className="definition-marker"
@@ -82,14 +110,16 @@ const CrosswordCell: React.FC<CellProps> = ({
                                 className="definition-text"
                                 style={{
                                     ['--fit-size' as string]: `${computeFitFontSize(
-                                        definition.definition || definition.word,
+                                        markerText,
                                         slotCount
                                     )}px`
                                 }}
                             >
-                                {definition.definition || definition.word}
+                                {markerText}
                             </span>
                         </div>
+                            );
+                        })()
                     ))}
                 </div>
             )}

@@ -7,6 +7,9 @@ export interface AppearanceSettings {
     blackCellColor: string;
     arrowColor: string;
     letterColor: string;
+    definitionTextColor: string;
+    borderColor: string;
+    separatorColor: string;
     gridFont: string;
     definitionFont: string;
 }
@@ -38,6 +41,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         const saved = localStorage.getItem('savedGrids');
         return saved ? JSON.parse(saved) : [];
     });
+    const [gridFontCustom, setGridFontCustom] = useState(appearance.gridFont);
+    const [definitionFontCustom, setDefinitionFontCustom] = useState(appearance.definitionFont);
 
     const handleSave = () => {
         if (!gridName.trim() || !currentGrid) return;
@@ -86,11 +91,31 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     const colorFields: { key: keyof AppearanceSettings; label: string }[] = [
         { key: 'blackCellColor', label: 'Couleur des cases noires' },
         { key: 'arrowColor', label: 'Couleur des flèches' },
-        { key: 'letterColor', label: 'Couleur des lettres' }
+        { key: 'letterColor', label: 'Couleur des lettres (grille)' },
+        { key: 'definitionTextColor', label: 'Couleur des définitions' },
+        { key: 'borderColor', label: 'Couleur des bordures de cases' },
+        { key: 'separatorColor', label: 'Couleur de la barre de séparation' }
+    ];
+
+    const fontOptions = [
+        { label: 'Charger une police…', value: 'custom' },
+        { label: 'Inter', value: "'Inter', 'Segoe UI', system-ui, sans-serif" },
+        { label: 'Arial', value: "Arial, 'Helvetica Neue', sans-serif" },
+        { label: 'Roboto', value: "'Roboto', 'Segoe UI', system-ui, sans-serif" },
+        { label: 'Lato', value: "'Lato', 'Segoe UI', system-ui, sans-serif" },
+        { label: 'Open Sans', value: "'Open Sans', 'Segoe UI', system-ui, sans-serif" },
+        { label: 'Montserrat', value: "'Montserrat', 'Segoe UI', system-ui, sans-serif" },
+        { label: 'Georgia', value: "Georgia, 'Times New Roman', serif" },
+        { label: 'Courier New', value: "'Courier New', monospace" }
     ];
 
     const handleAppearanceFieldChange = (key: keyof AppearanceSettings, value: string) => {
         onAppearanceChange({ [key]: value });
+    };
+
+    const selectedFontValue = (current: string) => {
+        const match = fontOptions.find((opt) => opt.value === current);
+        return match ? match.value : 'custom';
     };
 
     return (
@@ -234,28 +259,78 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
                         <div className="font-field">
                             <label>Police de la grille</label>
-                            <input
-                                type="text"
-                                value={appearance.gridFont}
-                                onChange={(e) => handleAppearanceFieldChange('gridFont', e.target.value)}
+                            <select
+                                className="font-select"
+                                value={selectedFontValue(appearance.gridFont)}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (value === 'custom') {
+                                        onAppearanceChange({ gridFont: gridFontCustom });
+                                    } else {
+                                        onAppearanceChange({ gridFont: value });
+                                    }
+                                }}
                                 onFocus={() => onInputFocus(true)}
                                 onBlur={() => onInputFocus(false)}
-                                className="color-text-input"
-                                placeholder="Ex: Inter, Arial, sans-serif"
-                            />
+                            >
+                                {fontOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {selectedFontValue(appearance.gridFont) === 'custom' && (
+                                <input
+                                    type="text"
+                                    value={gridFontCustom}
+                                    onChange={(e) => {
+                                        setGridFontCustom(e.target.value);
+                                        handleAppearanceFieldChange('gridFont', e.target.value);
+                                    }}
+                                    onFocus={() => onInputFocus(true)}
+                                    onBlur={() => onInputFocus(false)}
+                                    className="color-text-input"
+                                    placeholder="Ex: Inter, Arial, sans-serif"
+                                />
+                            )}
                         </div>
 
                         <div className="font-field">
                             <label>Police des définitions</label>
-                            <input
-                                type="text"
-                                value={appearance.definitionFont}
-                                onChange={(e) => handleAppearanceFieldChange('definitionFont', e.target.value)}
+                            <select
+                                className="font-select"
+                                value={selectedFontValue(appearance.definitionFont)}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (value === 'custom') {
+                                        onAppearanceChange({ definitionFont: definitionFontCustom });
+                                    } else {
+                                        onAppearanceChange({ definitionFont: value });
+                                    }
+                                }}
                                 onFocus={() => onInputFocus(true)}
                                 onBlur={() => onInputFocus(false)}
-                                className="color-text-input"
-                                placeholder="Ex: Inter, Georgia"
-                            />
+                            >
+                                {fontOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {selectedFontValue(appearance.definitionFont) === 'custom' && (
+                                <input
+                                    type="text"
+                                    value={definitionFontCustom}
+                                    onChange={(e) => {
+                                        setDefinitionFontCustom(e.target.value);
+                                        handleAppearanceFieldChange('definitionFont', e.target.value);
+                                    }}
+                                    onFocus={() => onInputFocus(true)}
+                                    onBlur={() => onInputFocus(false)}
+                                    className="color-text-input"
+                                    placeholder="Ex: Inter, Georgia"
+                                />
+                            )}
                         </div>
                     </div>
                 </div>

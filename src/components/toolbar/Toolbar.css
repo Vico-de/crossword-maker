@@ -118,6 +118,11 @@
     min-width: 220px;
 }
 
+.font-select {
+    composes: input-base;
+    padding: 8px;
+}
+
 /* Dropdown pour le chargement */
 .load-dropdown {
     position: relative;

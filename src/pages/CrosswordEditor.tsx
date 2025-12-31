@@ -119,6 +119,9 @@ export const CrosswordEditor: React.FC = () => {
         blackCellColor: '#000000',
         arrowColor: '#7a7a7a',
         letterColor: '#000000',
+        definitionTextColor: '#f5f5f5',
+        borderColor: '#cccccc',
+        separatorColor: '#ffffff',
         gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
         definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
     });
@@ -134,6 +137,9 @@ export const CrosswordEditor: React.FC = () => {
             ['--grid-black-color' as string]: appearance.blackCellColor,
             ['--grid-arrow-color' as string]: appearance.arrowColor,
             ['--grid-letter-color' as string]: appearance.letterColor,
+            ['--grid-definition-color' as string]: appearance.definitionTextColor,
+            ['--grid-border-color' as string]: appearance.borderColor,
+            ['--definition-separator-color' as string]: appearance.separatorColor,
             ['--grid-font-family' as string]: appearance.gridFont,
             ['--definition-font-family' as string]: appearance.definitionFont,
             ['--ui-font-family' as string]: appearance.gridFont
