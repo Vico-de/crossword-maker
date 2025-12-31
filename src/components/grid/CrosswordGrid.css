@@ -53,7 +53,7 @@
   background-color: #333;
   color: #f5f5f5;
   font-size: 10px;
-  padding: 2px;
+  padding: 0;
   position: relative;
   overflow: hidden;
   box-sizing: border-box;
@@ -72,14 +72,14 @@
 }
 
 .definition-markers.multiple {
-  flex-direction: row;
+  justify-content: space-between;
 }
 
 .definition-marker {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 2px;
+  padding: 2px 2px 1px;
   width: 100%;
   box-sizing: border-box;
   flex: 1;
@@ -90,10 +90,10 @@
 .definition-markers.multiple::after {
   content: '';
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 50%;
-  width: 1px;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 1px;
   background: rgba(255, 255, 255, 0.8);
   pointer-events: none;
 }
@@ -102,10 +102,9 @@
   font-size: var(--fit-size, 10px);
   line-height: 1.05;
   width: 100%;
-  white-space: nowrap;
-  word-break: keep-all;
+  white-space: normal;
+  word-break: break-word;
   overflow: hidden;
-  text-overflow: clip;
 }
 
 .arrow-markers {
@@ -121,11 +120,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 3px;
+  background: transparent;
+  border-radius: 0;
   color: #1976d2;
-  font-size: 11px;
-  box-shadow: 0 0 0 1px rgba(25, 118, 210, 0.35);
+  font-size: 12px;
+  box-shadow: none;
 }
 
 .arrow-marker::after {
@@ -167,25 +166,25 @@
 .arrow-marker.attach-left {
   left: 0;
   top: 50%;
-  transform: translate(-70%, -50%);
+  transform: translate(-60%, -50%);
 }
 
 .arrow-marker.attach-right {
   right: 0;
   top: 50%;
-  transform: translate(70%, -50%);
+  transform: translate(60%, -50%);
 }
 
 .arrow-marker.attach-top {
   top: 0;
   left: 50%;
-  transform: translate(-50%, -70%);
+  transform: translate(-50%, -60%);
 }
 
 .arrow-marker.attach-bottom {
   bottom: 0;
   left: 50%;
-  transform: translate(-50%, 70%);
+  transform: translate(-50%, 60%);
 }
 
 .grid-cell .cell-number {

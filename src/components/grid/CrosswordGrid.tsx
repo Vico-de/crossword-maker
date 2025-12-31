@@ -33,15 +33,20 @@ interface CellProps {
 const BASE_CELL_SIZE = 40;
 
 const computeFitFontSize = (text: string, slotCount: number) => {
-    const safeLength = Math.max(1, text.length);
-    const availableWidth = (BASE_CELL_SIZE - 4) / Math.max(1, slotCount);
-    const availableHeight = BASE_CELL_SIZE - 4;
+    const availableWidth = BASE_CELL_SIZE - 6;
+    const availableHeight = (BASE_CELL_SIZE - 6) / Math.max(1, slotCount) - 2;
 
-    const sizeFromWidth = availableWidth / safeLength;
-    const sizeFromHeight = availableHeight * 0.85;
-    const fitted = Math.min(sizeFromWidth, sizeFromHeight, 18);
+    for (let size = 18; size >= 6; size -= 1) {
+        const approxCharsPerLine = Math.max(1, Math.floor(availableWidth / (0.55 * size)));
+        const lines = Math.max(1, Math.ceil(text.length / approxCharsPerLine));
+        const totalHeight = lines * size * 1.05;
 
-    return Math.max(6, fitted);
+        if (totalHeight <= availableHeight) {
+            return size;
+        }
+    }
+
+    return 6;
 };
 
 const CrosswordCell: React.FC<CellProps> = ({
@@ -58,11 +63,6 @@ const CrosswordCell: React.FC<CellProps> = ({
         isSelected ? 'selected' : ''
     } ${isHighlighted ? 'highlighted' : ''}`;
 
-    const containerLayout = React.useMemo(() => {
-        if (!definitions || definitions.length < 2) return '';
-        return 'multiple';
-    }, [definitions]);
-
     const slotCount = definitions?.length ?? 1;
 
     return (
@@ -72,7 +72,7 @@ const CrosswordCell: React.FC<CellProps> = ({
         >
             {!isBlack && value}
             {isBlack && definitions && definitions.length > 0 && (
-                <div className={`definition-markers ${containerLayout}`}>
+                <div className={`definition-markers ${definitions.length > 1 ? 'multiple' : ''}`}>
                     {definitions.map((definition, index) => (
                         <div
                             key={`${definition.word}-${index}`}
