@@ -60,7 +60,7 @@ const initialState: CrosswordState = {
 
 // Modifier la définition de CrosswordAction pour ajouter l'action LOAD_GRID
 export type CrosswordAction =
-    | { type: 'SELECT_CELL'; payload: { x: number; y: number } }
+    | { type: 'SELECT_CELL'; payload: { x: number; y: number } | null }
     | { type: 'UPDATE_CELL'; payload: { x: number; y: number; changes: Partial<Cell> } }
     | { type: 'RESIZE_GRID'; payload: { width: number; height: number } }
     | { type: 'SET_DIRECTION'; payload: Direction }
