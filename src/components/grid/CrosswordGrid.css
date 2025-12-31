@@ -45,8 +45,146 @@
   border-color: #2196f3;
 }
 
+.grid-cell.highlighted {
+  background-color: #f4fbff;
+}
+
 .grid-cell.black {
   background-color: #333;
+  color: #f5f5f5;
+  font-size: 10px;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.definition-markers {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  align-items: stretch;
+  justify-content: center;
+  text-align: center;
+  gap: 0;
+  position: relative;
+}
+
+.definition-markers.multiple {
+  justify-content: space-between;
+}
+
+.definition-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 2px 1px;
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.definition-markers.multiple::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+}
+
+.definition-text {
+  font-size: var(--fit-size, 10px);
+  line-height: 1.05;
+  width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  overflow: hidden;
+}
+
+.arrow-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.arrow-marker {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-radius: 0;
+  color: #1976d2;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.arrow-marker::after {
+  content: '';
+}
+
+.arrow-marker.arrow-up::after {
+  content: '↑';
+}
+
+.arrow-marker.arrow-down::after {
+  content: '↓';
+}
+
+.arrow-marker.arrow-left::after {
+  content: '←';
+}
+
+.arrow-marker.arrow-right::after {
+  content: '→';
+}
+
+.arrow-marker.curved-right.arrow-down::after {
+  content: '↳';
+}
+
+.arrow-marker.curved-right.arrow-up::after {
+  content: '↱';
+}
+
+.arrow-marker.curved-left.arrow-down::after {
+  content: '↲';
+}
+
+.arrow-marker.curved-left.arrow-up::after {
+  content: '↰';
+}
+
+.arrow-marker.attach-left {
+  left: 0;
+  top: 50%;
+  transform: translate(-60%, -50%);
+}
+
+.arrow-marker.attach-right {
+  right: 0;
+  top: 50%;
+  transform: translate(60%, -50%);
+}
+
+.arrow-marker.attach-top {
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -60%);
+}
+
+.arrow-marker.attach-bottom {
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 60%);
 }
 
 .grid-cell .cell-number {
