@@ -331,7 +331,7 @@ export const CrosswordEditor: React.FC = () => {
                               data.placement.anchor.y === wordPosition.end.y;
 
                     if (!stillBlack || !anchorMatches) {
-                        delete next[word];
+                        next[word] = { ...data, placement: undefined };
                         hasChanges = true;
                     }
                 }

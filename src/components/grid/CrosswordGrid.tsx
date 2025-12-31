@@ -72,8 +72,8 @@ const CrosswordCell: React.FC<CellProps> = ({
                             <span
                                 className="definition-text"
                                 style={{
-                                    ['--text-length' as string]: Math.max(
-                                        1,
+                                    ['--fit-length' as string]: Math.max(
+                                        4,
                                         (definition.definition || definition.word).length
                                     )
                                 }}
