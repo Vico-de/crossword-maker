@@ -108,6 +108,11 @@ export const CrosswordEditor: React.FC = () => {
     }>>({});
     const [placementTargetWord, setPlacementTargetWord] = useState<string | null>(null);
     // Supprimez la ligne avec setIsSaveDialogOpen si elle existe
+
+    const wordPositions = useMemo(() => {
+        if (!state.currentGrid) return [];
+        return extractWordPositions(state.currentGrid.cells);
+    }, [state.currentGrid]);
     
     const handleCellUpdate = useCallback((x: number, y: number, changes: Partial<Cell>) => {
         if (!state.currentGrid?.cells[y]?.[x]) return;
@@ -367,10 +372,29 @@ export const CrosswordEditor: React.FC = () => {
         });
     };
 
-    const wordPositions = useMemo(() => {
-        if (!state.currentGrid) return [];
-        return extractWordPositions(state.currentGrid.cells);
-    }, [state.currentGrid]);
+    const wordsList = useMemo(() => {
+        const words = new Set<string>();
+        wordPositions.forEach((position) => words.add(position.word));
+        return Array.from(words).sort();
+    }, [wordPositions]);
+
+    const highlightedCells = useMemo(() => {
+        if (!selectedWord) return new Set<string>();
+        const occurrence = wordPositions.find((pos) => pos.word === selectedWord);
+        if (!occurrence) return new Set<string>();
+        return new Set(occurrence.cells.map((cell) => `${cell.x}-${cell.y}`));
+    }, [selectedWord, wordPositions]);
+
+    const definitionPlacements = useMemo(() => {
+        const placements: Record<string, { word: string; definition?: string; direction: 'up' | 'down' | 'left' | 'right' }[]> = {};
+        Object.entries(wordDefinitions).forEach(([word, data]) => {
+            if (!data.placement) return;
+            const key = `${data.placement.x}-${data.placement.y}`;
+            if (!placements[key]) placements[key] = [];
+            placements[key].push({ word, definition: data.definition, direction: data.placement.direction });
+        });
+        return placements;
+    }, [wordDefinitions]);
 
     const wordsList = useMemo(() => {
         const words = new Set<string>();
