@@ -372,6 +372,22 @@ export const CrosswordEditor: React.FC = () => {
         });
     };
 
+    const {
+        wordsList,
+        highlightedCells,
+        definitionPlacements
+    } = useMemo(() => {
+        const words = new Set<string>();
+        wordPositions.forEach((position) => words.add(position.word));
+
+        let highlighted = new Set<string>();
+        if (selectedWord) {
+            const occurrence = wordPositions.find((pos) => pos.word === selectedWord);
+            if (occurrence) {
+                highlighted = new Set(occurrence.cells.map((cell) => `${cell.x}-${cell.y}`));
+            }
+        }
+
     const wordsList = useMemo(() => {
         const words = new Set<string>();
         wordPositions.forEach((position) => words.add(position.word));
@@ -393,6 +409,13 @@ export const CrosswordEditor: React.FC = () => {
             if (!placements[key]) placements[key] = [];
             placements[key].push({ word, definition: data.definition, direction: data.placement.direction });
         });
+
+        return {
+            wordsList: Array.from(words).sort(),
+            highlightedCells: highlighted,
+            definitionPlacements: placements
+        };
+    }, [selectedWord, wordPositions, wordDefinitions]);
         return placements;
     }, [wordDefinitions]);
 
