@@ -1,0 +1,142 @@
+/* components/toolbar/Toolbar.css */
+.toolbar-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+}
+
+.toolbar-buttons {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+}
+
+/* Style de base pour tous les boutons */
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+/* Bouton d'outil (transparent) */
+.tool-button {
+    composes: btn;
+    background: transparent;
+}
+
+.tool-button:hover {
+    background: #f0f0f0;
+}
+
+.tool-button.active {
+    background: #e6f3ff;
+    color: #1a75ff;
+}
+
+/* Bouton d'action (bleu) */
+.action-button {
+    composes: btn;
+    background: #1a75ff;
+    color: white;
+}
+
+.action-button:hover {
+    background: #0052cc;
+}
+
+/* Contenu des outils */
+.tool-content {
+    padding: 16px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    animation: slideDown 0.2s ease-out;
+}
+
+.tool-panel {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+/* Inputs */
+.input-base {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.grid-name-input {
+    composes: input-base;
+    min-width: 200px;
+}
+
+.size-input {
+    composes: input-base;
+    width: 60px;
+}
+
+.resize-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Dropdown pour le chargement */
+.load-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: white;
+    min-width: 250px;
+    max-height: 400px;
+    overflow-y: auto;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+.saved-grid-item {
+    padding: 8px 16px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.saved-grid-item:hover {
+    background-color: #f5f5f5;
+}
+
+.saved-grid-item small {
+    color: #666;
+    font-size: 0.8em;
+}
+
+.no-grids {
+    padding: 16px;
+    color: #666;
+    text-align: center;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
