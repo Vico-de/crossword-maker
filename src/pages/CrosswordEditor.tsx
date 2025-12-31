@@ -396,6 +396,30 @@ export const CrosswordEditor: React.FC = () => {
         return placements;
     }, [wordDefinitions]);
 
+    const wordsList = useMemo(() => {
+        const words = new Set<string>();
+        wordPositions.forEach((position) => words.add(position.word));
+        return Array.from(words).sort();
+    }, [wordPositions]);
+
+    const highlightedCells = useMemo(() => {
+        if (!selectedWord) return new Set<string>();
+        const occurrence = wordPositions.find((pos) => pos.word === selectedWord);
+        if (!occurrence) return new Set<string>();
+        return new Set(occurrence.cells.map((cell) => `${cell.x}-${cell.y}`));
+    }, [selectedWord, wordPositions]);
+
+    const definitionPlacements = useMemo(() => {
+        const placements: Record<string, { word: string; definition?: string; direction: 'up' | 'down' | 'left' | 'right' }[]> = {};
+        Object.entries(wordDefinitions).forEach(([word, data]) => {
+            if (!data.placement) return;
+            const key = `${data.placement.x}-${data.placement.y}`;
+            if (!placements[key]) placements[key] = [];
+            placements[key].push({ word, definition: data.definition, direction: data.placement.direction });
+        });
+        return placements;
+    }, [wordDefinitions]);
+
     return (
         <div className="crossword-editor">
             <Toolbar 
