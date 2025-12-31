@@ -105,7 +105,14 @@ export const CrosswordEditor: React.FC = () => {
     const [selectedWord, setSelectedWord] = useState<string | null>(null);
     const [wordDefinitions, setWordDefinitions] = useState<Record<string, {
         definition: string;
-        placement?: { x: number; y: number; direction: 'up' | 'down' | 'left' | 'right'; anchor: { x: number; y: number }; wordDirection: WordDirection };
+        placement?: {
+            x: number;
+            y: number;
+            direction: 'up' | 'down' | 'left' | 'right';
+            anchor: { x: number; y: number };
+            anchorRole: 'start' | 'end';
+            wordDirection: WordDirection;
+        };
     }>>({});
     const [placementTargetWord, setPlacementTargetWord] = useState<string | null>(null);
     // Supprimez la ligne avec setIsSaveDialogOpen si elle existe
@@ -292,6 +299,48 @@ export const CrosswordEditor: React.FC = () => {
         return Math.abs(cell.x - target.x) + Math.abs(cell.y - target.y) === 1;
     };
 
+    React.useEffect(() => {
+        if (!state.currentGrid) return;
+
+        setWordDefinitions((prev) => {
+            let hasChanges = false;
+            const next = { ...prev };
+
+            Object.entries(prev).forEach(([word, data]) => {
+                const wordPosition = wordPositions.find((pos) => pos.word === word);
+
+                if (!wordPosition) {
+                    delete next[word];
+                    hasChanges = true;
+                    return;
+                }
+
+                if (data.placement) {
+                    const cell = state.currentGrid!.cells[data.placement.y]?.[data.placement.x];
+                    const stillBlack = cell?.isBlack;
+                    const touchesStart = isAdjacentTo({ x: data.placement.x, y: data.placement.y }, wordPosition.start);
+                    const touchesEnd = isAdjacentTo({ x: data.placement.x, y: data.placement.y }, wordPosition.end);
+
+                    const anchorMatches =
+                        data.placement.anchorRole === 'start'
+                            ? touchesStart &&
+                              data.placement.anchor.x === wordPosition.start.x &&
+                              data.placement.anchor.y === wordPosition.start.y
+                            : touchesEnd &&
+                              data.placement.anchor.x === wordPosition.end.x &&
+                              data.placement.anchor.y === wordPosition.end.y;
+
+                    if (!stillBlack || !anchorMatches) {
+                        delete next[word];
+                        hasChanges = true;
+                    }
+                }
+            });
+
+            return hasChanges ? next : prev;
+        });
+    }, [state.currentGrid, wordPositions]);
+
     const attemptDefinitionPlacement = useCallback((word: string, x: number, y: number) => {
         if (!state.currentGrid) return;
 
@@ -331,7 +380,7 @@ export const CrosswordEditor: React.FC = () => {
             ...prev,
             [word]: {
                 definition: prev[word]?.definition || '',
-                placement: { x, y, direction, anchor, wordDirection: candidate.direction }
+                placement: { x, y, direction, anchor, anchorRole: isStart ? 'start' : 'end', wordDirection: candidate.direction }
             }
         }));
         setSelectedWord(word);
@@ -399,7 +448,7 @@ export const CrosswordEditor: React.FC = () => {
         }
 
         const placements: Record<string, { word: string; definition?: string }[]> = {};
-        const arrows: Record<string, { direction: 'up' | 'down' | 'left' | 'right'; variant?: 'straight' | 'curved-right'; from: { x: number; y: number } }[]> = {};
+        const arrows: Record<string, { direction: 'up' | 'down' | 'left' | 'right'; variant?: 'straight' | 'curved-right' | 'curved-left'; from: { x: number; y: number }; attachment?: 'left' | 'right' | 'top' | 'bottom' }[]> = {};
 
         Object.entries(wordDefinitions).forEach(([word, data]) => {
             if (!data.placement) return;
@@ -418,14 +467,25 @@ export const CrosswordEditor: React.FC = () => {
             if (withinBounds && isTargetPlayable) {
                 const arrowKey = `${target.x}-${target.y}`;
                 if (!arrows[arrowKey]) arrows[arrowKey] = [];
-                const variant = data.placement.wordDirection === 'horizontal' && (data.placement.direction === 'down' || data.placement.direction === 'up')
-                    ? 'curved-right'
-                    : 'straight';
+                let variant: 'straight' | 'curved-right' | 'curved-left' = 'straight';
+                if (data.placement.wordDirection === 'horizontal' && (data.placement.direction === 'down' || data.placement.direction === 'up')) {
+                    variant = data.placement.anchorRole === 'start' ? 'curved-right' : 'curved-left';
+                }
+
+                const attachment: 'left' | 'right' | 'top' | 'bottom' =
+                    data.placement.x < target.x
+                        ? 'left'
+                        : data.placement.x > target.x
+                          ? 'right'
+                          : data.placement.y < target.y
+                            ? 'top'
+                            : 'bottom';
 
                 arrows[arrowKey].push({
                     direction: data.placement.direction,
                     variant,
-                    from: { x: data.placement.x, y: data.placement.y }
+                    from: { x: data.placement.x, y: data.placement.y },
+                    attachment
                 });
             }
         });

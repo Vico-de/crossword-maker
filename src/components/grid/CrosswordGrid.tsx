@@ -12,8 +12,9 @@ interface DefinitionMarker {
 
 interface ArrowMarker {
     direction: DefinitionDirection;
-    variant?: 'straight' | 'curved-right';
+    variant?: 'straight' | 'curved-right' | 'curved-left';
     from: { x: number; y: number };
+    attachment?: 'left' | 'right' | 'top' | 'bottom';
 }
 
 interface CellProps {
@@ -68,7 +69,17 @@ const CrosswordCell: React.FC<CellProps> = ({
                             key={`${definition.word}-${index}`}
                             className="definition-marker"
                         >
-                            <span className="definition-text">{definition.definition || definition.word}</span>
+                            <span
+                                className="definition-text"
+                                style={{
+                                    ['--text-length' as string]: Math.max(
+                                        1,
+                                        (definition.definition || definition.word).length
+                                    )
+                                }}
+                            >
+                                {definition.definition || definition.word}
+                            </span>
                         </div>
                     ))}
                 </div>
@@ -78,7 +89,13 @@ const CrosswordCell: React.FC<CellProps> = ({
                     {arrows.map((arrow, index) => (
                         <span
                             key={`${arrow.direction}-${index}`}
-                            className={`arrow-marker arrow-${arrow.direction} ${arrow.variant === 'curved-right' ? 'curved' : ''}`}
+                            className={`arrow-marker arrow-${arrow.direction} ${
+                                arrow.variant === 'straight'
+                                    ? ''
+                                    : arrow.variant === 'curved-left'
+                                      ? 'curved-left'
+                                      : 'curved-right'
+                            } ${arrow.attachment ? `attach-${arrow.attachment}` : ''}`}
                         />
                     ))}
                 </div>
