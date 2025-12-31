@@ -30,11 +30,18 @@ interface CellProps {
     onChange: (changes: Partial<CellType>) => void;
 }
 
-const directionSymbol: Record<DefinitionDirection, string> = {
-    up: '↑',
-    down: '↓',
-    left: '←',
-    right: '→'
+const BASE_CELL_SIZE = 40;
+
+const computeFitFontSize = (text: string, slotCount: number) => {
+    const safeLength = Math.max(1, text.length);
+    const availableWidth = (BASE_CELL_SIZE - 4) / Math.max(1, slotCount);
+    const availableHeight = BASE_CELL_SIZE - 4;
+
+    const sizeFromWidth = availableWidth / safeLength;
+    const sizeFromHeight = availableHeight * 0.85;
+    const fitted = Math.min(sizeFromWidth, sizeFromHeight, 18);
+
+    return Math.max(6, fitted);
 };
 
 const CrosswordCell: React.FC<CellProps> = ({
@@ -56,6 +63,8 @@ const CrosswordCell: React.FC<CellProps> = ({
         return 'multiple';
     }, [definitions]);
 
+    const slotCount = definitions?.length ?? 1;
+
     return (
         <div
             className={cellClassName}
@@ -72,10 +81,10 @@ const CrosswordCell: React.FC<CellProps> = ({
                             <span
                                 className="definition-text"
                                 style={{
-                                    ['--fit-length' as string]: Math.max(
-                                        4,
-                                        (definition.definition || definition.word).length
-                                    )
+                                    ['--fit-size' as string]: `${computeFitFontSize(
+                                        definition.definition || definition.word,
+                                        slotCount
+                                    )}px`
                                 }}
                             >
                                 {definition.definition || definition.word}
