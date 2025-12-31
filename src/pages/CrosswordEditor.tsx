@@ -2,7 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CrosswordGrid } from '../components/grid/CrosswordGrid';
 import { Toolbar, type AppearanceSettings } from '../components/toolbar/Toolbar';
 import { useCrossword } from '../context/CrosswordContext';
-import type { Cell, Grid, GridSet, SavedGrid } from '../models/types';
+import type {
+    Cell,
+    Grid,
+    GridSet,
+    SavedGrid,
+    WordDefinitionData,
+    WordDefinitionPlacement
+} from '../models/types';
 import './CrosswordEditor.css';
 
 // Supprimez l'import de SaveManager et SavedGrid s'ils existent
@@ -114,42 +121,408 @@ const buildEmptyGrid = (width: number, height: number) => {
     };
 };
 
+const DEFAULT_APPEARANCE: AppearanceSettings = {
+    blackCellColor: '#000000',
+    arrowColor: '#7a7a7a',
+    letterColor: '#000000',
+    definitionTextColor: '#f5f5f5',
+    borderColor: '#cccccc',
+    separatorColor: '#ffffff',
+    gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
+    definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
+};
+
+type PackedDefinition = [
+    string,
+    string,
+    |
+        [
+            number,
+            number,
+            WordDefinitionPlacement['direction'],
+            [number, number],
+            WordDefinitionPlacement['anchorRole'],
+            WordDirection
+        ]
+        | undefined
+];
+
+type ArrowPlacement = {
+    direction: 'up' | 'down' | 'left' | 'right';
+    variant?: 'straight' | 'curved-right' | 'curved-left';
+    from: { x: number; y: number };
+    attachment?: 'left' | 'right' | 'top' | 'bottom';
+};
+
+const packDefinitions = (definitions: Record<string, WordDefinitionData>): PackedDefinition[] => {
+    return Object.entries(definitions).map(([word, data]) => [
+        word,
+        data.definition,
+        data.placement
+            ? [
+                  data.placement.x,
+                  data.placement.y,
+                  data.placement.direction,
+                  [data.placement.anchor.x, data.placement.anchor.y],
+                  data.placement.anchorRole,
+                  data.placement.wordDirection
+              ]
+            : undefined
+    ]);
+};
+
+const unpackDefinitions = (packed: PackedDefinition[]): Record<string, WordDefinitionData> => {
+    const result: Record<string, WordDefinitionData> = {};
+    packed.forEach(([word, definition, placement]) => {
+        result[word] = {
+            definition,
+            placement:
+                placement && placement[2]
+                    ? {
+                          x: placement[0],
+                          y: placement[1],
+                          direction: placement[2],
+                          anchor: { x: placement[3][0], y: placement[3][1] },
+                          anchorRole: placement[4],
+                          wordDirection: placement[5]
+                      }
+                    : undefined
+        };
+    });
+    return result;
+};
+
+const packGrid = (grid: Grid) => ({
+    n: grid.name || '',
+    s: [grid.size.width, grid.size.height],
+    r: grid.cells.map((row) => row.map((cell) => (cell.isBlack ? '#' : cell.value || '.')).join(''))
+});
+
+const unpackGrid = (packed: { n?: string; s: [number, number]; r: string[] }): Grid => {
+    const [width, height] = packed.s;
+    const cells: Cell[][] = Array(height)
+        .fill(null)
+        .map((_, y) =>
+            Array(width)
+                .fill(null)
+                .map((__, x) => {
+                    const char = packed.r[y]?.[x] || '.';
+                    const isBlack = char === '#';
+                    return {
+                        x,
+                        y,
+                        isBlack,
+                        value: isBlack || char === '.' ? '' : char.toUpperCase(),
+                        isHighlighted: false
+                    } as Cell;
+                })
+        );
+
+    return {
+        name: packed.n || '',
+        size: { width, height },
+        cells,
+        words: [],
+        status: 'loaded'
+    } as Grid;
+};
+
+const buildPlacementsForGrid = (
+    grid: Grid | undefined,
+    definitions: Record<string, WordDefinitionData>
+): { definitionPlacements: Record<string, { word: string; definition?: string }[]>; arrowPlacements: Record<string, ArrowPlacement[]> } => {
+    const definitionPlacements: Record<string, { word: string; definition?: string }[]> = {};
+    const arrowPlacements: Record<string, ArrowPlacement[]> = {};
+
+    if (!grid) return { definitionPlacements, arrowPlacements };
+
+    Object.entries(definitions).forEach(([word, data]) => {
+        if (!data.placement) return;
+        const { x, y, direction, anchorRole, wordDirection, anchor } = data.placement;
+        const cell = grid.cells[y]?.[x];
+        if (!cell || !cell.isBlack) return;
+
+        const key = `${x}-${y}`;
+        if (!definitionPlacements[key]) definitionPlacements[key] = [];
+        definitionPlacements[key].push({ word, definition: data.definition });
+
+        const target = {
+            x: x + (direction === 'right' ? 1 : direction === 'left' ? -1 : 0),
+            y: y + (direction === 'down' ? 1 : direction === 'up' ? -1 : 0)
+        };
+
+        const withinBounds =
+            target.x >= 0 &&
+            target.y >= 0 &&
+            target.y < grid.cells.length &&
+            target.x < grid.cells[0].length;
+        const playable = withinBounds && !grid.cells[target.y][target.x].isBlack;
+
+        if (withinBounds && playable) {
+            const arrowKey = `${target.x}-${target.y}`;
+            if (!arrowPlacements[arrowKey]) arrowPlacements[arrowKey] = [];
+
+            let variant: ArrowPlacement['variant'] = 'straight';
+            if (wordDirection === 'horizontal' && (direction === 'down' || direction === 'up')) {
+                variant = anchorRole === 'start' ? 'curved-right' : 'curved-left';
+            }
+
+            const attachment: ArrowPlacement['attachment'] =
+                x < target.x ? 'left' : x > target.x ? 'right' : y < target.y ? 'top' : 'bottom';
+
+            arrowPlacements[arrowKey].push({
+                direction,
+                variant,
+                from: anchor,
+                attachment
+            });
+        }
+    });
+
+    return { definitionPlacements, arrowPlacements };
+};
+
+const renderGridCanvas = (
+    grid: Grid,
+    definitions: Record<string, WordDefinitionData>,
+    appearance: AppearanceSettings
+): HTMLCanvasElement => {
+    const cellSize = 36;
+    const canvas = document.createElement('canvas');
+    canvas.width = grid.size.width * cellSize;
+    canvas.height = grid.size.height * cellSize;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return canvas;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const { definitionPlacements, arrowPlacements } = buildPlacementsForGrid(grid, definitions);
+
+    const fitDefinitionSize = (text: string, slotCount: number) => {
+        const availableWidth = cellSize - 6;
+        const availableHeight = (cellSize - 6) / Math.max(1, slotCount) - 2;
+        const words = text.split(/\s+/).filter(Boolean);
+        const longestWord = words.reduce((max, w) => Math.max(max, w.length), 0);
+        const upperBound = Math.min(18, availableHeight, longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18);
+
+        for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
+            ctx.font = `${size}px ${appearance.definitionFont}`;
+            const spaceWidth = ctx.measureText(' ').width;
+            let lines = 1;
+            let width = 0;
+            let fits = true;
+            for (const word of words) {
+                const w = ctx.measureText(word).width;
+                if (w > availableWidth) {
+                    fits = false;
+                    break;
+                }
+                if (width === 0) {
+                    width = w;
+                } else if (width + spaceWidth + w <= availableWidth) {
+                    width += spaceWidth + w;
+                } else {
+                    lines += 1;
+                    if (lines * size * 1.1 > availableHeight) {
+                        fits = false;
+                        break;
+                    }
+                    width = w;
+                }
+            }
+
+            if (fits) return size;
+        }
+
+        return 4;
+    };
+
+    grid.cells.forEach((row, y) => {
+        row.forEach((cell, x) => {
+            const posX = x * cellSize;
+            const posY = y * cellSize;
+            if (cell.isBlack) {
+                ctx.fillStyle = appearance.blackCellColor;
+                ctx.fillRect(posX, posY, cellSize, cellSize);
+
+                const key = `${x}-${y}`;
+                const cellDefs = definitionPlacements[key];
+                if (cellDefs && cellDefs.length > 0) {
+                    const slots = cellDefs.length;
+                    cellDefs.forEach((def, index) => {
+                        const startY = posY + (cellSize / slots) * index;
+                        const areaHeight = cellSize / slots;
+                        const fontSize = fitDefinitionSize((def.definition || def.word).toUpperCase(), slots);
+                        ctx.fillStyle = appearance.definitionTextColor;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.font = `${fontSize}px ${appearance.definitionFont}`;
+
+                        const words = (def.definition || def.word).toUpperCase().split(/\s+/).filter(Boolean);
+                        const availableWidth = cellSize - 6;
+                        const lines: string[] = [];
+                        let current = '';
+
+                        words.forEach((word) => {
+                            const tentative = current ? `${current} ${word}` : word;
+                            if (ctx.measureText(tentative).width <= availableWidth) {
+                                current = tentative;
+                            } else {
+                                if (current) lines.push(current);
+                                current = word;
+                            }
+                        });
+                        if (current) lines.push(current);
+
+                        lines.forEach((line, lineIndex) => {
+                            ctx.fillText(line, posX + cellSize / 2, startY + areaHeight / 2 + (lineIndex - (lines.length - 1) / 2) * (fontSize * 1.1));
+                        });
+                    });
+
+                    if (cellDefs.length > 1) {
+                        ctx.strokeStyle = appearance.separatorColor;
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(posX, posY + cellSize / 2);
+                        ctx.lineTo(posX + cellSize, posY + cellSize / 2);
+                        ctx.stroke();
+                    }
+                }
+            } else {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(posX, posY, cellSize, cellSize);
+                if (cell.value) {
+                    ctx.fillStyle = appearance.letterColor;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = `${cellSize * 0.55}px ${appearance.gridFont}`;
+                    ctx.fillText(cell.value, posX + cellSize / 2, posY + cellSize / 2 + 1);
+                }
+            }
+        });
+    });
+
+    ctx.strokeStyle = appearance.borderColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= grid.size.width; x++) {
+        ctx.moveTo(x * cellSize + 0.5, 0);
+        ctx.lineTo(x * cellSize + 0.5, canvas.height);
+    }
+    for (let y = 0; y <= grid.size.height; y++) {
+        ctx.moveTo(0, y * cellSize + 0.5);
+        ctx.lineTo(canvas.width, y * cellSize + 0.5);
+    }
+    ctx.stroke();
+
+    Object.entries(arrowPlacements).forEach(([key, arrows]) => {
+        const [targetX, targetY] = key.split('-').map(Number);
+        const centerX = targetX * cellSize + cellSize / 2;
+        const centerY = targetY * cellSize + cellSize / 2;
+        const offset = cellSize * 0.35;
+        ctx.fillStyle = appearance.arrowColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `${cellSize * 0.32}px ${appearance.gridFont}`;
+
+        arrows.forEach((arrow) => {
+            const dx = arrow.attachment === 'left' ? -offset : arrow.attachment === 'right' ? offset : 0;
+            const dy = arrow.attachment === 'top' ? -offset : arrow.attachment === 'bottom' ? offset : 0;
+            const char =
+                arrow.variant === 'curved-left'
+                    ? arrow.direction === 'down'
+                        ? '↲'
+                        : '↰'
+                    : arrow.variant === 'curved-right'
+                      ? arrow.direction === 'down'
+                          ? '↳'
+                          : '↱'
+                      : arrow.direction === 'left'
+                        ? '←'
+                        : arrow.direction === 'right'
+                          ? '→'
+                          : arrow.direction === 'up'
+                            ? '↑'
+                            : '↓';
+            ctx.fillText(char, centerX + dx, centerY + dy);
+        });
+    });
+
+    return canvas;
+};
+
+const loadJsPdf = async () => {
+    // @ts-ignore - chargement dynamique depuis un CDN pour éviter les dépendances locales
+    const mod: any = await import('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+    return mod.jsPDF || (mod.default && mod.default.jsPDF) || mod.default;
+};
+
+const serializeSet = (set: GridSet, appearance: AppearanceSettings) => {
+    const payload = {
+        i: set.id,
+        n: set.name,
+        a: appearance,
+        g: set.grids.map((g) => ({
+            i: g.id,
+            n: g.name,
+            t: g.timestamp,
+            r: packGrid(g.grid),
+            d: packDefinitions(g.definitions || {})
+        }))
+    };
+
+    return JSON.stringify(payload);
+};
+
+const deserializeSet = (raw: string): { set: GridSet; appearance: AppearanceSettings } => {
+    const parsed = JSON.parse(raw);
+    const appearance = parsed.a || DEFAULT_APPEARANCE;
+    const set: GridSet = {
+        id: parsed.i || Date.now().toString(),
+        name: parsed.n || 'Set importé',
+        appearance,
+        grids: Array.isArray(parsed.g)
+            ? parsed.g.map((g: any) => ({
+                  id: g.i || Date.now().toString(),
+                  name: g.n || 'Grille',
+                  timestamp: g.t || Date.now(),
+                  grid: unpackGrid(g.r),
+                  definitions: unpackDefinitions(g.d || [])
+              }))
+            : []
+    };
+
+    return { set, appearance };
+};
+
 export const CrosswordEditor: React.FC = () => {
     const { state, dispatch } = useCrossword();
     const [isToolbarInputActive, setIsToolbarInputActive] = useState(false);
     const gridAreaRef = React.useRef<HTMLDivElement | null>(null);
     const [selectedWord, setSelectedWord] = useState<string | null>(null);
-    const [wordDefinitions, setWordDefinitions] = useState<Record<string, {
-        definition: string;
-        placement?: {
-            x: number;
-            y: number;
-            direction: 'up' | 'down' | 'left' | 'right';
-            anchor: { x: number; y: number };
-            anchorRole: 'start' | 'end';
-            wordDirection: WordDirection;
-        };
-    }>>({});
+    const [wordDefinitions, setWordDefinitions] = useState<Record<string, WordDefinitionData>>({});
     const [placementTargetWord, setPlacementTargetWord] = useState<string | null>(null);
-    const [appearance, setAppearance] = useState<AppearanceSettings>({
-        blackCellColor: '#000000',
-        arrowColor: '#7a7a7a',
-        letterColor: '#000000',
-        definitionTextColor: '#f5f5f5',
-        borderColor: '#cccccc',
-        separatorColor: '#ffffff',
-        gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
-        definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
-    });
+    const [appearance, setAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
     const initialSets: GridSet[] = useMemo(() => {
         const storedSets = localStorage.getItem('gridSets');
-        if (storedSets) return JSON.parse(storedSets);
+        if (storedSets) {
+            try {
+                const parsed: GridSet[] = JSON.parse(storedSets);
+                return parsed.map((set) => ({
+                    ...set,
+                    appearance: set.appearance || DEFAULT_APPEARANCE
+                }));
+            } catch (error) {
+                console.warn('Impossible de lire les sets sauvegardés', error);
+            }
+        }
 
         const legacyGrids = localStorage.getItem('savedGrids');
         if (legacyGrids) {
             const grids: SavedGrid[] = JSON.parse(legacyGrids);
             if (grids.length > 0) {
-                return [{ id: 'legacy', name: 'Set local', grids }];
+                return [{ id: 'legacy', name: 'Set local', grids, appearance: DEFAULT_APPEARANCE }];
             }
         }
         return [];
@@ -173,6 +546,17 @@ export const CrosswordEditor: React.FC = () => {
         if (!state.currentGrid) return [];
         return extractWordPositions(state.currentGrid.cells);
     }, [state.currentGrid]);
+
+    const filteredDefinitions = useMemo(() => {
+        const validWords = new Set(wordPositions.map((pos) => pos.word));
+        const next: Record<string, WordDefinitionData> = {};
+        Object.entries(wordDefinitions).forEach(([word, data]) => {
+            if (validWords.has(word)) {
+                next[word] = data;
+            }
+        });
+        return next;
+    }, [wordDefinitions, wordPositions]);
 
     const appearanceVars = useMemo(
         () => ({
@@ -203,8 +587,14 @@ export const CrosswordEditor: React.FC = () => {
         if (current) {
             setSavedGrids(current.grids);
             setCurrentSetName(current.name);
+            setAppearance(current.appearance || DEFAULT_APPEARANCE);
         }
     }, [gridSets, currentSetId]);
+
+    useEffect(() => {
+        if (!currentSetId) return;
+        setGridSets((prev) => prev.map((set) => (set.id === currentSetId ? { ...set, appearance } : set)));
+    }, [appearance, currentSetId]);
 
     const resetEditingState = useCallback(() => {
         const size = state.currentGrid?.size || { width: 15, height: 15 };
@@ -221,12 +611,12 @@ export const CrosswordEditor: React.FC = () => {
         } else {
             const id = Date.now().toString();
             const name = currentSetName || 'Nouveau set';
-            const newSet: GridSet = { id, name, grids };
+            const newSet: GridSet = { id, name, grids, appearance };
             setGridSets([newSet]);
             setCurrentSetId(id);
             setCurrentSetName(name);
         }
-    }, [currentSetId, currentSetName]);
+    }, [appearance, currentSetId, currentSetName]);
 
     const handleSetNameChange = useCallback((name: string) => {
         setCurrentSetName(name);
@@ -240,6 +630,7 @@ export const CrosswordEditor: React.FC = () => {
         setCurrentSetId(id);
         setCurrentSetName(target.name);
         setSavedGrids(target.grids);
+        setAppearance(target.appearance || DEFAULT_APPEARANCE);
         resetEditingState();
         setShowSetDialog(false);
     }, [gridSets, resetEditingState]);
@@ -247,37 +638,128 @@ export const CrosswordEditor: React.FC = () => {
     const handleCreateNewSet = useCallback((nameOverride?: string) => {
         const name = (nameOverride ?? newSetName).trim() || 'Nouveau set';
         const id = Date.now().toString();
-        const newSet: GridSet = { id, name, grids: [] };
+        const newSet: GridSet = { id, name, grids: [], appearance };
         setGridSets((prev) => [...prev, newSet]);
         setCurrentSetId(id);
         setCurrentSetName(name);
         setSavedGrids([]);
+        setAppearance(DEFAULT_APPEARANCE);
         resetEditingState();
         setShowSetDialog(false);
-    }, [newSetName, resetEditingState]);
+    }, [appearance, newSetName, resetEditingState]);
 
     const handleExportSet = useCallback(() => {
-        if (!currentSetId) {
-            window.alert('Créez ou chargez un set avant d\'exporter.');
-            return;
-        }
         const exportName = (currentSetName || 'set-sans-nom').trim();
-        const payload = { name: exportName, grids: savedGrids };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const targetSet = currentSetId
+            ? gridSets.find((set) => set.id === currentSetId) || { id: currentSetId, name: exportName, grids: savedGrids }
+            : { id: Date.now().toString(), name: exportName, grids: savedGrids };
+
+        const compact = serializeSet({ ...targetSet, grids: savedGrids, appearance }, appearance);
+        const blob = new Blob([compact], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
         link.download = `${exportName.replace(/\s+/g, '_').toLowerCase() || 'set'}.json`;
         link.click();
         URL.revokeObjectURL(url);
-    }, [currentSetId, currentSetName, savedGrids]);
+    }, [appearance, currentSetId, currentSetName, gridSets, savedGrids]);
 
-    const handleGridLoad = useCallback((grid: Grid) => {
-        setSelectedWord(null);
-        setPlacementTargetWord(null);
-        setWordDefinitions({});
-        dispatch({ type: 'LOAD_GRID', payload: grid });
-    }, [dispatch]);
+    const handleExportGridPdf = useCallback(async () => {
+        if (!state.currentGrid) {
+            window.alert('Aucune grille à exporter.');
+            return;
+        }
+        try {
+            const canvas = renderGridCanvas(state.currentGrid, filteredDefinitions, appearance);
+            const orientation = state.currentGrid.size.width >= state.currentGrid.size.height ? 'landscape' : 'portrait';
+            const JsPdf = await loadJsPdf();
+            const pdf = new JsPdf({
+                orientation,
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+            const img = canvas.toDataURL('image/png');
+            pdf.addImage(img, 'PNG', 0, 0, canvas.width, canvas.height);
+            const gridName = (state.currentGrid.name || 'grille').replace(/\s+/g, '_').toLowerCase();
+            pdf.save(`${gridName || 'grille'}.pdf`);
+        } catch (error) {
+            console.error('Export PDF', error);
+            window.alert('Export PDF impossible sans connexion au CDN jsPDF.');
+        }
+    }, [appearance, filteredDefinitions, state.currentGrid]);
+
+    const handleExportSetPdf = useCallback(async () => {
+        const targets = savedGrids.length > 0
+            ? savedGrids
+            : state.currentGrid
+              ? [{ id: 'current', name: state.currentGrid.name || 'Grille', timestamp: Date.now(), grid: state.currentGrid, definitions: filteredDefinitions } as SavedGrid]
+              : [];
+
+        if (targets.length === 0) {
+            window.alert('Aucune grille à exporter.');
+            return;
+        }
+
+        try {
+            const JsPdf = await loadJsPdf();
+            const pdf = new JsPdf({ orientation: 'portrait', unit: 'px' });
+            let isFirst = true;
+            targets.forEach((entry) => {
+                const canvas = renderGridCanvas(entry.grid, entry.definitions || {}, appearance);
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const scale = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+                const renderWidth = canvas.width * scale;
+                const renderHeight = canvas.height * scale;
+                const offsetX = (pageWidth - renderWidth) / 2;
+                const offsetY = (pageHeight - renderHeight) / 2;
+
+                if (!isFirst) pdf.addPage();
+                isFirst = false;
+                pdf.setFontSize(12);
+                pdf.text(entry.name, 12, 16);
+                const imgData = canvas.toDataURL('image/png');
+                pdf.addImage(imgData, 'PNG', offsetX, offsetY, renderWidth, renderHeight);
+            });
+
+            const setLabel = (currentSetName || 'set').replace(/\s+/g, '_').toLowerCase();
+            pdf.save(`${setLabel}-grilles.pdf`);
+        } catch (error) {
+            console.error('Export set PDF', error);
+            window.alert('Export PDF impossible sans connexion au CDN jsPDF.');
+        }
+    }, [appearance, currentSetName, filteredDefinitions, savedGrids, state.currentGrid]);
+
+    const handleGridLoad = useCallback(
+        (grid: Grid, definitions?: Record<string, WordDefinitionData>) => {
+            setSelectedWord(null);
+            setPlacementTargetWord(null);
+            setWordDefinitions(definitions || {});
+            dispatch({ type: 'LOAD_GRID', payload: grid });
+        },
+        [dispatch]
+    );
+
+    const handleImportSetData = useCallback(
+        (content: string) => {
+            try {
+                const { set, appearance: importedAppearance } = deserializeSet(content);
+                const id = set.id || Date.now().toString();
+                const normalizedId = gridSets.some((s) => s.id === id) ? `${id}-${Date.now()}` : id;
+                const normalizedSet = { ...set, id: normalizedId, appearance: importedAppearance };
+                setGridSets((prev) => [...prev, normalizedSet]);
+                setCurrentSetId(normalizedId);
+                setCurrentSetName(normalizedSet.name);
+                setSavedGrids(normalizedSet.grids || []);
+                setAppearance(importedAppearance || DEFAULT_APPEARANCE);
+                setShowSetDialog(false);
+            } catch (error) {
+                console.error('Import set error', error);
+                window.alert('Impossible de charger ce set. Vérifiez le fichier.');
+            }
+        },
+        [gridSets]
+    );
     
     const handleCellUpdate = useCallback((x: number, y: number, changes: Partial<Cell>) => {
         if (!state.currentGrid?.cells[y]?.[x]) return;
@@ -608,48 +1090,10 @@ export const CrosswordEditor: React.FC = () => {
             }
         }
 
-        const placements: Record<string, { word: string; definition?: string }[]> = {};
-        const arrows: Record<string, { direction: 'up' | 'down' | 'left' | 'right'; variant?: 'straight' | 'curved-right' | 'curved-left'; from: { x: number; y: number }; attachment?: 'left' | 'right' | 'top' | 'bottom' }[]> = {};
-
-        Object.entries(wordDefinitions).forEach(([word, data]) => {
-            if (!data.placement) return;
-            const key = `${data.placement.x}-${data.placement.y}`;
-            if (!placements[key]) placements[key] = [];
-            placements[key].push({ word, definition: data.definition });
-
-            const target = {
-                x: data.placement.x + (data.placement.direction === 'right' ? 1 : data.placement.direction === 'left' ? -1 : 0),
-                y: data.placement.y + (data.placement.direction === 'down' ? 1 : data.placement.direction === 'up' ? -1 : 0)
-            };
-
-            const withinBounds = !!(state.currentGrid && target.y >= 0 && target.x >= 0 && target.y < state.currentGrid.cells.length && target.x < state.currentGrid.cells[0].length);
-            const isTargetPlayable = !!(state.currentGrid && withinBounds && !state.currentGrid.cells[target.y][target.x].isBlack);
-
-            if (withinBounds && isTargetPlayable) {
-                const arrowKey = `${target.x}-${target.y}`;
-                if (!arrows[arrowKey]) arrows[arrowKey] = [];
-                let variant: 'straight' | 'curved-right' | 'curved-left' = 'straight';
-                if (data.placement.wordDirection === 'horizontal' && (data.placement.direction === 'down' || data.placement.direction === 'up')) {
-                    variant = data.placement.anchorRole === 'start' ? 'curved-right' : 'curved-left';
-                }
-
-                const attachment: 'left' | 'right' | 'top' | 'bottom' =
-                    data.placement.x < target.x
-                        ? 'left'
-                        : data.placement.x > target.x
-                          ? 'right'
-                          : data.placement.y < target.y
-                            ? 'top'
-                            : 'bottom';
-
-                arrows[arrowKey].push({
-                    direction: data.placement.direction,
-                    variant,
-                    from: { x: data.placement.x, y: data.placement.y },
-                    attachment
-                });
-            }
-        });
+        const { definitionPlacements: placements, arrowPlacements: arrows } = buildPlacementsForGrid(
+            state.currentGrid || undefined,
+            filteredDefinitions
+        );
 
         return {
             wordsList: Array.from(words).sort(),
@@ -657,7 +1101,7 @@ export const CrosswordEditor: React.FC = () => {
             definitionPlacements: placements,
             arrowPlacements: arrows
         };
-    }, [selectedWord, wordPositions, wordDefinitions, state.currentGrid]);
+    }, [filteredDefinitions, selectedWord, wordPositions, state.currentGrid]);
 
     return (
         <div className="crossword-editor" onMouseDown={handleOutsideClick} style={appearanceVars}>
@@ -707,6 +1151,7 @@ export const CrosswordEditor: React.FC = () => {
             <Toolbar
                 onResize={handleResize}
                 currentGrid={state.currentGrid}
+                definitions={filteredDefinitions}
                 onInputFocus={setIsToolbarInputActive}
                 appearance={appearance}
                 onAppearanceChange={handleAppearanceChange}
@@ -718,6 +1163,9 @@ export const CrosswordEditor: React.FC = () => {
                 onSetNameChange={handleSetNameChange}
                 onNewSet={() => handleCreateNewSet()}
                 onExportSet={handleExportSet}
+                onImportSetData={handleImportSetData}
+                onExportGridPdf={handleExportGridPdf}
+                onExportSetPdf={handleExportSetPdf}
                 onSelectSet={handleSelectSet}
                 currentSetId={currentSetId}
             />

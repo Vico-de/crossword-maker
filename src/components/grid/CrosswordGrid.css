@@ -19,6 +19,11 @@
 .grid-row {
   display: flex;
   justify-content: center;
+  margin-top: -1px;
+}
+
+.grid-row:first-child {
+  margin-top: 0;
 }
 
 .grid-cell {
@@ -37,9 +42,18 @@
   transition: all 0.2s ease;
   box-sizing: border-box;
   color: var(--grid-letter-color, #000);
-  border: none;
+  border: 1px solid var(--grid-border-color, #ccc);
+  margin-left: -1px;
   line-height: 1;
   flex-shrink: 0;
+}
+
+.grid-row:first-child .grid-cell {
+  margin-top: 0;
+}
+
+.grid-cell:first-child {
+  margin-left: 0;
 }
 
 .grid-cell:hover {
@@ -110,7 +124,8 @@
   line-height: 1.1;
   width: 100%;
   white-space: normal;
-  word-break: normal;
+  word-break: keep-all;
+  overflow-wrap: normal;
   overflow: hidden;
   color: var(--grid-definition-color, #f5f5f5);
   text-transform: uppercase;
@@ -124,15 +139,15 @@
 
 .arrow-marker {
   position: absolute;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border-radius: 0;
   color: var(--grid-arrow-color, #666);
-  font-size: 10px;
+  font-size: 9px;
   box-shadow: none;
 }
 
@@ -175,25 +190,25 @@
 .arrow-marker.attach-left {
   left: 0;
   top: 50%;
-  transform: translate(-35%, -50%);
+  transform: translate(-45%, -50%);
 }
 
 .arrow-marker.attach-right {
   right: 0;
   top: 50%;
-  transform: translate(35%, -50%);
+  transform: translate(45%, -50%);
 }
 
 .arrow-marker.attach-top {
   top: 0;
   left: 50%;
-  transform: translate(-50%, -35%);
+  transform: translate(-50%, -45%);
 }
 
 .arrow-marker.attach-bottom {
   bottom: 0;
   left: 50%;
-  transform: translate(-50%, 35%);
+  transform: translate(-50%, 45%);
 }
 
 .grid-cell .cell-number {

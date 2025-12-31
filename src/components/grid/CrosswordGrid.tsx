@@ -35,19 +35,26 @@ const BASE_CELL_SIZE = 40;
 const computeFitFontSize = (text: string, slotCount: number) => {
     const availableWidth = BASE_CELL_SIZE - 6;
     const availableHeight = (BASE_CELL_SIZE - 6) / Math.max(1, slotCount) - 2;
+    const words = text.split(/\s+/).filter(Boolean);
+    const longestWord = words.reduce((max, w) => Math.max(max, w.length), 0);
 
-    const lineCountForSize = (size: number) => {
-        const words = text.split(/\s+/).filter(Boolean);
-        if (words.length === 0) return 1;
+    const maxHeightSize = availableHeight / Math.max(1, words.length) / 1.15;
+    const maxWidthSize = longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18;
+    const upperBound = Math.min(18, maxHeightSize, maxWidthSize);
 
-        const charWidth = 0.55 * size;
+    for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
+        const charWidth = 0.52 * size;
         const maxLineWidth = availableWidth;
         let currentLineWidth = 0;
         let lines = 1;
+        let fits = true;
 
         for (const word of words) {
             const wordWidth = word.length * charWidth;
-            if (wordWidth > maxLineWidth) return Number.POSITIVE_INFINITY;
+            if (wordWidth > maxLineWidth) {
+                fits = false;
+                break;
+            }
 
             if (currentLineWidth === 0) {
                 currentLineWidth = wordWidth;
@@ -55,23 +62,18 @@ const computeFitFontSize = (text: string, slotCount: number) => {
                 currentLineWidth += charWidth + wordWidth;
             } else {
                 lines += 1;
+                if (lines * size * 1.1 > availableHeight) {
+                    fits = false;
+                    break;
+                }
                 currentLineWidth = wordWidth;
             }
         }
 
-        return lines;
-    };
-
-    for (let size = 18; size >= 6; size -= 1) {
-        const lines = lineCountForSize(size);
-        const totalHeight = lines * size * 1.1;
-
-        if (lines !== Number.POSITIVE_INFINITY && totalHeight <= availableHeight) {
-            return size;
-        }
+        if (fits) return size;
     }
 
-    return 6;
+    return 4;
 };
 
 const CrosswordCell: React.FC<CellProps> = ({

@@ -105,13 +105,32 @@ function crosswordReducer(state: CrosswordState, action: CrosswordAction): Cross
             
         case 'RESIZE_GRID': {
             const { width, height } = action.payload;
-            if (width <= 0 || height <= 0) return state;
-            
+            if (width <= 0 || height <= 0 || !state.currentGrid) return state;
+
+            const existing = state.currentGrid.cells;
+            const newCells = createEmptyGrid(width, height);
+            const maxY = Math.min(height, existing.length);
+            const maxX = Math.min(width, existing[0].length);
+
+            for (let y = 0; y < maxY; y++) {
+                for (let x = 0; x < maxX; x++) {
+                    newCells[y][x] = { ...existing[y][x], x, y };
+                }
+            }
+
+            const nextSelected =
+                state.selectedCell &&
+                state.selectedCell.x < width &&
+                state.selectedCell.y < height
+                    ? state.selectedCell
+                    : null;
+
             return {
                 ...state,
+                selectedCell: nextSelected,
                 currentGrid: {
-                    ...state.currentGrid!,
-                    cells: createEmptyGrid(width, height),
+                    ...state.currentGrid,
+                    cells: newCells,
                     size: { width, height }
                 },
                 config: {

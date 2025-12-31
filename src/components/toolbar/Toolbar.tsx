@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { Grid, GridSet, SavedGrid } from '../../models/types';
+import type { Grid, GridSet, SavedGrid, WordDefinitionData } from '../../models/types';
 import './Toolbar.css';
 
 export interface AppearanceSettings {
@@ -16,17 +16,21 @@ export interface AppearanceSettings {
 interface ToolbarProps {
     onResize: (width: number, height: number) => void;
     currentGrid?: Grid;
+    definitions: Record<string, WordDefinitionData>;
     onInputFocus: (isFocused: boolean) => void;
     appearance: AppearanceSettings;
     onAppearanceChange: (changes: Partial<AppearanceSettings>) => void;
     savedGrids: SavedGrid[];
     onSavedGridsChange: (grids: SavedGrid[]) => void;
-    onGridLoad: (grid: Grid) => void;
+    onGridLoad: (grid: Grid, definitions?: Record<string, WordDefinitionData>) => void;
     gridSets: GridSet[];
     currentSetName: string;
     onSetNameChange: (name: string) => void;
     onNewSet: () => void;
     onExportSet: () => void;
+    onImportSetData: (content: string) => void;
+    onExportGridPdf: () => void;
+    onExportSetPdf: () => void;
     onSelectSet: (id: string) => void;
     currentSetId: string | null;
 }
@@ -34,6 +38,7 @@ interface ToolbarProps {
 export const Toolbar: React.FC<ToolbarProps> = ({
     onResize,
     currentGrid,
+    definitions,
     onInputFocus,
     appearance,
     onAppearanceChange,
@@ -45,10 +50,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     onSetNameChange,
     onNewSet,
     onExportSet,
+    onImportSetData,
+    onExportGridPdf,
+    onExportSetPdf,
     onSelectSet,
     currentSetId
 }) => {
-    const [activePanel, setActivePanel] = useState<'info' | 'resize' | 'appearance' | null>(null);
+    const [activePanel, setActivePanel] = useState<'info' | 'appearance' | null>(null);
     const [gridName, setGridName] = useState(currentGrid?.name || '');
     const [showLoadDropdown, setShowLoadDropdown] = useState(false);
     const [dimensions, setDimensions] = useState({
@@ -60,9 +68,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     const [showSetDropdown, setShowSetDropdown] = useState(false);
     const gridFontFileInput = useRef<HTMLInputElement | null>(null);
     const definitionFontFileInput = useRef<HTMLInputElement | null>(null);
+    const setFileInput = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         setGridName(currentGrid?.name || '');
+    }, [currentGrid]);
+
+    useEffect(() => {
+        setDimensions({
+            width: currentGrid?.size.width || 15,
+            height: currentGrid?.size.height || 15
+        });
     }, [currentGrid]);
 
     const handleSave = () => {
@@ -75,7 +91,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             grid: {
                 ...currentGrid,
                 name: gridName.trim()
-            }
+            },
+            definitions
         };
 
         const updatedGrids = [...savedGrids, newSavedGrid];
@@ -84,7 +101,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
     const handleLoad = (savedGrid: SavedGrid) => {
         if (window.confirm(`Charger la grille "${savedGrid.name}" ?`)) {
-            onGridLoad(savedGrid.grid);
+            onGridLoad(savedGrid.grid, savedGrid.definitions);
             setShowLoadDropdown(false);
         }
     };
@@ -102,6 +119,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     const handleResize = () => {
         onResize(dimensions.width, dimensions.height);
         setActivePanel(null);
+    };
+
+    const handleSetFile = (file?: File | null) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const content = event.target?.result;
+            if (typeof content === 'string') {
+                onImportSetData(content);
+            }
+        };
+        reader.readAsText(file);
     };
 
     const colorFields: { key: keyof AppearanceSettings; label: string }[] = [
@@ -164,21 +193,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     return (
         <div className="toolbar-container">
             <div className="toolbar-buttons">
-                {['info', 'resize', 'appearance'].map((panel) => (
+                {['info', 'appearance'].map((panel) => (
                     <button
                         key={panel}
                         className={`tool-button ${activePanel === panel ? 'active' : ''}`}
                         onClick={() =>
                             setActivePanel(
-                                activePanel === panel ? null : (panel as 'info' | 'resize' | 'appearance')
+                                activePanel === panel ? null : (panel as 'info' | 'appearance')
                             )
                         }
                     >
                         {panel === 'info'
                             ? 'Infos'
-                            : panel === 'resize'
-                              ? 'Redimensionner'
-                              : 'Apparence'}
+                            : 'Apparence'}
                     </button>
                 ))}
             </div>
@@ -204,6 +231,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             <div className="action-group">
                                 <button className="action-button" type="button" onClick={onExportSet}>
                                     Exporter le set
+                                </button>
+                                <button className="action-button" type="button" onClick={onExportSetPdf}>
+                                    Exporter le set (PDF)
+                                </button>
+                                <button className="tool-button" type="button" onClick={() => setFileInput.current?.click()}>
+                                    Importer un set local
                                 </button>
                                 <button className="tool-button" type="button" onClick={onNewSet}>
                                     Nouveau set de grille
@@ -297,37 +330,35 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         </div>
                                     )}
                                 </div>
+                                <button className="action-button" type="button" onClick={onExportGridPdf}>
+                                    Exporter la grille (PDF)
+                                </button>
+                            </div>
+
+                            <label className="input-label">Redimensionner</label>
+                            <div className="resize-controls">
+                                <input
+                                    type="number"
+                                    className="size-input"
+                                    value={dimensions.width}
+                                    onChange={(e) => setDimensions({ ...dimensions, width: parseInt(e.target.value) || 15 })}
+                                    min="5"
+                                    max="25"
+                                />
+                                <span>×</span>
+                                <input
+                                    type="number"
+                                    className="size-input"
+                                    value={dimensions.height}
+                                    onChange={(e) => setDimensions({ ...dimensions, height: parseInt(e.target.value) || 15 })}
+                                    min="5"
+                                    max="25"
+                                />
+                                <button className="tool-button" onClick={handleResize}>
+                                    Appliquer sans effacer
+                                </button>
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
-
-            {activePanel === 'resize' && (
-                <div className="tool-content">
-                    <div className="tool-panel">
-                        <div className="resize-controls">
-                            <input
-                                type="number"
-                                className="size-input"
-                                value={dimensions.width}
-                                onChange={(e) => setDimensions({ ...dimensions, width: parseInt(e.target.value) || 15 })}
-                                min="5"
-                                max="25"
-                            />
-                            <span>×</span>
-                            <input
-                                type="number"
-                                className="size-input"
-                                value={dimensions.height}
-                                onChange={(e) => setDimensions({ ...dimensions, height: parseInt(e.target.value) || 15 })}
-                                min="5"
-                                max="25"
-                            />
-                        </div>
-                        <button className="action-button" onClick={handleResize}>
-                            Appliquer
-                        </button>
                     </div>
                 </div>
             )}
@@ -467,6 +498,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         loadFontFile(file, 'grid');
                         e.target.value = '';
                     }
+                }}
+            />
+            <input
+                ref={setFileInput}
+                type="file"
+                accept=".json,.txt"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    handleSetFile(file);
+                    e.target.value = '';
                 }}
             />
             <input
