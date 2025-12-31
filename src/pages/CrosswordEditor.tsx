@@ -74,59 +74,44 @@ export const CrosswordEditor: React.FC = () => {
         });
     }, [state.currentGrid, dispatch]);
 
-    // Déplacez la déclaration de moveToNextCell avant son utilisation
-    const moveToPreviousCell = (): boolean => {
+    const moveSelection = (deltaX: number, deltaY: number, allowBlackSelection = false): boolean => {
         if (!state.selectedCell || !state.currentGrid) return false;
         const { x, y } = state.selectedCell;
         const { cells } = state.currentGrid;
-        
-        if (state.selectedDirection === 'horizontal') {
-            let newX = x;
-            while (newX > 0) {
-                newX--;
-                if (!cells[y][newX].isBlack) {
-                    dispatch({ type: 'SELECT_CELL', payload: { x: newX, y } });
-                    return true;
-                }
-            }
-        } else {
-            let newY = y;
-            while (newY > 0) {
-                newY--;
-                if (!cells[newY][x].isBlack) {
-                    dispatch({ type: 'SELECT_CELL', payload: { x, y: newY } });
-                    return true;
-                }
-            }
+        const targetX = x + deltaX;
+        const targetY = y + deltaY;
+
+        if (
+            targetX < 0 ||
+            targetY < 0 ||
+            targetY >= cells.length ||
+            targetX >= cells[0].length
+        ) {
+            return false;
         }
-        return false;
+
+        const targetCell = cells[targetY][targetX];
+
+        if (!allowBlackSelection && targetCell.isBlack) {
+            return false;
+        }
+
+        dispatch({ type: 'SELECT_CELL', payload: { x: targetX, y: targetY } });
+        return true;
+    };
+
+    const moveToPreviousCell = (): boolean => {
+        if (state.selectedDirection === 'horizontal') {
+            return moveSelection(-1, 0);
+        }
+        return moveSelection(0, -1);
     };
 
     const moveToNextCell = (): boolean => {
-        if (!state.selectedCell || !state.currentGrid) return false;
-        const { x, y } = state.selectedCell;
-        const { cells } = state.currentGrid;
-        
         if (state.selectedDirection === 'horizontal') {
-            let newX = x;
-            while (newX < cells[0].length - 1) {
-                newX++;
-                if (!cells[y][newX].isBlack) {
-                    dispatch({ type: 'SELECT_CELL', payload: { x: newX, y } });
-                    return true;
-                }
-            }
-        } else {
-            let newY = y;
-            while (newY < cells.length - 1) {
-                newY++;
-                if (!cells[newY][x].isBlack) {
-                    dispatch({ type: 'SELECT_CELL', payload: { x, y: newY } });
-                    return true;
-                }
-            }
+            return moveSelection(1, 0);
         }
-        return false;
+        return moveSelection(0, 1);
     };
 
     // Modifiez le handleKeyDown pour vérifier si le dialog est ouvert
@@ -191,27 +176,19 @@ export const CrosswordEditor: React.FC = () => {
         switch (event.key) {
             case 'ArrowLeft':
                 event.preventDefault();
-                if (state.selectedDirection === 'horizontal') {
-                    moveToPreviousCell();
-                }
+                moveSelection(-1, 0, true);
                 break;
             case 'ArrowRight':
                 event.preventDefault();
-                if (state.selectedDirection === 'horizontal') {
-                    moveToNextCell();
-                }
+                moveSelection(1, 0, true);
                 break;
             case 'ArrowUp':
                 event.preventDefault();
-                if (state.selectedDirection === 'vertical') {
-                    moveToPreviousCell();
-                }
+                moveSelection(0, -1, true);
                 break;
             case 'ArrowDown':
                 event.preventDefault();
-                if (state.selectedDirection === 'vertical') {
-                    moveToNextCell();
-                }
+                moveSelection(0, 1, true);
                 break;
             default:
                 // Gestion des lettres
