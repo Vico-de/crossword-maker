@@ -1,12 +1,16 @@
 .crossword-grid {
   flex: 2;
-  background-color: var(--grid-cell-color, #fff);
-  padding: 20px;
+  background-color: var(--grid-border-color, #ccc);
+  padding: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: auto;
   font-family: var(--ui-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif);
   border-radius: 0;
   border: 1px solid var(--grid-border-color, #ccc);
+  display: grid;
+  gap: 1px;
+  width: max-content;
+  height: max-content;
 }
 
 .crossword-grid-container {
@@ -17,19 +21,9 @@
   padding-top: 40px;
 }
 
-.grid-row {
-  display: flex;
-  justify-content: center;
-  margin-top: -1px;
-}
-
-.grid-row:first-child {
-  margin-top: 0;
-}
-
 .grid-cell {
-  width: 40px;
-  height: 40px;
+  width: var(--grid-cell-size, 40px);
+  height: var(--grid-cell-size, 40px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -43,18 +37,9 @@
   transition: all 0.2s ease;
   box-sizing: border-box;
   color: var(--grid-letter-color, #000);
-  border: 1px solid var(--grid-border-color, #ccc);
-  margin-left: -1px;
+  border: none;
   line-height: 1;
   flex-shrink: 0;
-}
-
-.grid-row:first-child .grid-cell {
-  margin-top: 0;
-}
-
-.grid-cell:first-child {
-  margin-left: 0;
 }
 
 .grid-cell:hover {
@@ -140,15 +125,15 @@
 
 .arrow-marker {
   position: absolute;
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border-radius: 0;
   color: var(--grid-arrow-color, #666);
-  font-size: 9px;
+  font-size: 7px;
   box-shadow: none;
 }
 
@@ -191,25 +176,25 @@
 .arrow-marker.attach-left {
   left: 0;
   top: 50%;
-  transform: translate(-45%, -50%);
+  transform: translate(-35%, -50%);
 }
 
 .arrow-marker.attach-right {
   right: 0;
   top: 50%;
-  transform: translate(45%, -50%);
+  transform: translate(35%, -50%);
 }
 
 .arrow-marker.attach-top {
   top: 0;
   left: 50%;
-  transform: translate(-50%, -45%);
+  transform: translate(-50%, -35%);
 }
 
 .arrow-marker.attach-bottom {
   bottom: 0;
   left: 50%;
-  transform: translate(-50%, 45%);
+  transform: translate(-50%, 35%);
 }
 
 .grid-cell .cell-number {

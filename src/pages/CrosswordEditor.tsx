@@ -21,6 +21,7 @@ interface WordPosition {
     cells: { x: number; y: number }[];
 }
 
+// Parcourt la grille pour lister les mots existants avec leurs coordonnées.
 const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
     const positions: WordPosition[] = [];
 
@@ -96,11 +97,46 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
                 cells: [...currentCells]
             });
         }
+
+        const contentBytes = encoder.encode(lines.join('\n'));
+        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
+
+        const resourcesParts = [
+            `/XObject << /${page.name} ${page.imageId} 0 R >>`,
+            `/ProcSet [ /PDF ${fontId ? '/Text ' : ''}/ImageC ]`
+        ];
+
+        if (fontId) {
+            resourcesParts.push(`/Font << /F1 ${fontId} 0 R >>`);
+        }
+
+        writeObject(
+            page.pageId,
+            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${`<< ${resourcesParts.join(' ')} >>`} /MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`
+        );
+    });
+
+    writeObject(
+        pagesId,
+        `<< /Type /Pages /Count ${preparedPages.length} /Kids [${preparedPages
+            .map((page) => `${page.pageId} 0 R`)
+            .join(' ')}] >>`
+    );
+    writeObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+
+    const xrefStart = byteLength();
+    chunks.push(`xref\n0 ${nextId}\n`);
+    chunks.push('0000000000 65535 f \n');
+    for (let i = 1; i < nextId; i++) {
+        const offset = offsets[i] ?? 0;
+        chunks.push(`${offset.toString().padStart(10, '0')} 00000 n \n`);
     }
+    chunks.push(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
 
     return positions;
 };
 
+// Construit une grille vide aux dimensions souhaitées.
 const buildEmptyGrid = (width: number, height: number) => {
     return {
         name: '',
@@ -151,6 +187,7 @@ type ArrowPlacement = {
     attachment?: 'left' | 'right' | 'top' | 'bottom';
 };
 
+// Compacte les définitions et leurs ancrages pour les sauvegardes de set.
 const packDefinitions = (definitions: Record<string, WordDefinitionData>): PackedDefinition[] => {
     return Object.entries(definitions).map(([word, data]) => [
         word,
@@ -168,6 +205,7 @@ const packDefinitions = (definitions: Record<string, WordDefinitionData>): Packe
     ]);
 };
 
+// Restaure les définitions depuis la forme compacte du set.
 const unpackDefinitions = (packed: PackedDefinition[]): Record<string, WordDefinitionData> => {
     const result: Record<string, WordDefinitionData> = {};
     packed.forEach(([word, definition, placement]) => {
@@ -189,12 +227,14 @@ const unpackDefinitions = (packed: PackedDefinition[]): Record<string, WordDefin
     return result;
 };
 
+// Sérialise la grille en notation compacte (lettre, # pour noire, . pour vide).
 const packGrid = (grid: Grid) => ({
     n: grid.name || '',
     s: [grid.size.width, grid.size.height],
     r: grid.cells.map((row) => row.map((cell) => (cell.isBlack ? '#' : cell.value || '.')).join(''))
 });
 
+// Désérialise la notation compacte vers la grille complète.
 const unpackGrid = (packed: { n?: string; s: [number, number]; r: string[] }): Grid => {
     const [width, height] = packed.s;
     const cells: Cell[][] = Array(height)
@@ -224,6 +264,7 @@ const unpackGrid = (packed: { n?: string; s: [number, number]; r: string[] }): G
     } as Grid;
 };
 
+// Prépare la carte des définitions/flèches à afficher dans la grille courante.
 const buildPlacementsForGrid = (
     grid: Grid | undefined,
     definitions: Record<string, WordDefinitionData>
@@ -282,17 +323,25 @@ const buildPlacementsForGrid = (
 const renderGridCanvas = (
     grid: Grid,
     definitions: Record<string, WordDefinitionData>,
-    appearance: AppearanceSettings
+    appearance: AppearanceSettings,
+    scale = 2
 ): HTMLCanvasElement => {
-    const cellSize = 36;
+    // Canvas haute résolution pour des exports PDF nets sans dépendance externe.
+    const baseCell = 40;
     const canvas = document.createElement('canvas');
-    canvas.width = grid.size.width * cellSize;
-    canvas.height = grid.size.height * cellSize;
+    const boardWidth = grid.size.width * baseCell;
+    const boardHeight = grid.size.height * baseCell;
+    canvas.width = boardWidth * scale;
+    canvas.height = boardHeight * scale;
     const ctx = canvas.getContext('2d');
     if (!ctx) return canvas;
 
+    const cellSize = baseCell;
+
+    ctx.scale(scale, scale);
+
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, boardWidth, boardHeight);
 
     const { definitionPlacements, arrowPlacements } = buildPlacementsForGrid(grid, definitions);
 
@@ -399,15 +448,15 @@ const renderGridCanvas = (
     });
 
     ctx.strokeStyle = appearance.borderColor;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1 / scale;
     ctx.beginPath();
     for (let x = 0; x <= grid.size.width; x++) {
         ctx.moveTo(x * cellSize + 0.5, 0);
-        ctx.lineTo(x * cellSize + 0.5, canvas.height);
+        ctx.lineTo(x * cellSize + 0.5, boardHeight);
     }
     for (let y = 0; y <= grid.size.height; y++) {
         ctx.moveTo(0, y * cellSize + 0.5);
-        ctx.lineTo(canvas.width, y * cellSize + 0.5);
+        ctx.lineTo(boardWidth, y * cellSize + 0.5);
     }
     ctx.stroke();
 
@@ -822,7 +871,7 @@ export const CrosswordEditor: React.FC = () => {
                     {
                         width: canvas.width,
                         height: canvas.height,
-                        dataUrl: canvas.toDataURL('image/jpeg', 0.92),
+                        dataUrl: canvas.toDataURL('image/jpeg', 0.98),
                         label: gridName
                     }
                 ],
@@ -852,7 +901,7 @@ export const CrosswordEditor: React.FC = () => {
                 return {
                     width: canvas.width,
                     height: canvas.height,
-                    dataUrl: canvas.toDataURL('image/jpeg', 0.92),
+                    dataUrl: canvas.toDataURL('image/jpeg', 0.98),
                     label: entry.name
                 };
             });

@@ -1,4 +1,6 @@
 // components/grid/CrosswordGrid.tsx
+// Rendu de la grille : on utilise une grille CSS avec un espacement uniforme
+// pour éviter les doubles bordures et garder des cellules strictement carrées.
 import React from 'react';
 import type { Cell as CellType } from '../../models/types';
 import './CrosswordGrid.css';
@@ -76,6 +78,7 @@ const computeFitFontSize = (text: string, slotCount: number) => {
     return 4;
 };
 
+// Cellule individuelle de la grille (blanche ou noire).
 const CrosswordCell: React.FC<CellProps> = ({
     value,
     isBlack,
@@ -93,20 +96,9 @@ const CrosswordCell: React.FC<CellProps> = ({
     } ${isHighlighted ? 'highlighted' : ''}`;
 
     const slotCount = definitions?.length ?? 1;
-    const borderColor = 'var(--grid-border-color, #ccc)';
-    const cellStyle: React.CSSProperties = {
-        borderRight: `1px solid ${borderColor}`,
-        borderBottom: `1px solid ${borderColor}`,
-        borderTop: y === 0 ? `1px solid ${borderColor}` : 'none',
-        borderLeft: x === 0 ? `1px solid ${borderColor}` : 'none'
-    };
 
     return (
-        <div
-            className={cellClassName}
-            onClick={onClick}
-            style={cellStyle}
-        >
+        <div className={cellClassName} onClick={onClick}>
             {!isBlack && value}
             {isBlack && definitions && definitions.length > 0 && (
                 <div className={`definition-markers ${definitions.length > 1 ? 'multiple' : ''}`}>
@@ -114,22 +106,19 @@ const CrosswordCell: React.FC<CellProps> = ({
                         (() => {
                             const markerText = (definition.definition || definition.word).toUpperCase();
                             return (
-                        <div
-                            key={`${definition.word}-${index}`}
-                            className="definition-marker"
-                        >
-                            <span
-                                className="definition-text"
-                                style={{
-                                    ['--fit-size' as string]: `${computeFitFontSize(
-                                        markerText,
-                                        slotCount
-                                    )}px`
-                                }}
-                            >
-                                {markerText}
-                            </span>
-                        </div>
+                                <div key={`${definition.word}-${index}`} className="definition-marker">
+                                    <span
+                                        className="definition-text"
+                                        style={{
+                                            ['--fit-size' as string]: `${computeFitFontSize(
+                                                markerText,
+                                                slotCount
+                                            )}px`
+                                        }}
+                                    >
+                                        {markerText}
+                                    </span>
+                                </div>
                             );
                         })()
                     ))}
@@ -180,39 +169,44 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
     arrowPlacements,
     onBlackCellClick
 }) => {
+    const gridWidth = cells[0]?.length || 0;
+    const gridHeight = cells.length;
+    const boardStyle: React.CSSProperties = {
+        gridTemplateColumns: `repeat(${gridWidth}, var(--grid-cell-size, ${BASE_CELL_SIZE}px))`,
+        gridTemplateRows: `repeat(${gridHeight}, var(--grid-cell-size, ${BASE_CELL_SIZE}px))`
+    };
+
     return (
         <div className="crossword-grid-container">
-            <button 
+            <button
                 className="direction-indicator"
                 onClick={onDirectionChange}
                 title="Changer de direction (Tab)"
             >
                 {selectedDirection === 'horizontal' ? '→' : '↓'}
             </button>
-            <div className="crossword-grid">
-                {cells.map((row, y) => (
-                    <div key={y} className="grid-row">
-                        {row.map((cell, x) => (
-                            <CrosswordCell
-                                key={`${x}-${y}`}
-                                {...cell}
-                                x={x}
-                                y={y}
-                                isSelected={selectedCell?.x === x && selectedCell?.y === y}
-                                isHighlighted={highlightedCells?.has(`${x}-${y}`)}
-                                definitions={definitionPlacements?.[`${x}-${y}`]}
-                                arrows={arrowPlacements?.[`${x}-${y}`]}
-                                onClick={() => {
-                                    onCellClick(x, y);
-                                    if (cell.isBlack && onBlackCellClick) {
-                                        onBlackCellClick(x, y);
-                                    }
-                                }}
-                                onChange={(changes) => onCellUpdate(x, y, changes)}
-                            />
-                        ))}
-                    </div>
-                ))}
+            <div className="crossword-grid" style={boardStyle}>
+                {cells.flatMap((row, y) =>
+                    row.map((cell, x) => (
+                        <CrosswordCell
+                            key={`${x}-${y}`}
+                            {...cell}
+                            x={x}
+                            y={y}
+                            isSelected={selectedCell?.x === x && selectedCell?.y === y}
+                            isHighlighted={highlightedCells?.has(`${x}-${y}`)}
+                            definitions={definitionPlacements?.[`${x}-${y}`]}
+                            arrows={arrowPlacements?.[`${x}-${y}`]}
+                            onClick={() => {
+                                onCellClick(x, y);
+                                if (cell.isBlack && onBlackCellClick) {
+                                    onBlackCellClick(x, y);
+                                }
+                            }}
+                            onChange={(changes) => onCellUpdate(x, y, changes)}
+                        />
+                    ))
+                )}
             </div>
         </div>
     );

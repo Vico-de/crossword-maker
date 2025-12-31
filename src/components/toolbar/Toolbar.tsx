@@ -268,9 +268,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 <button className="action-button" type="button" onClick={onExportSetPdf}>
                                     Exporter le set (PDF)
                                 </button>
-                                <button className="tool-button" type="button" onClick={() => setFileInput.current?.click()}>
-                                    Importer un set local
-                                </button>
                                 <button className="tool-button" type="button" onClick={onNewSet}>
                                     Nouveau set de grille
                                 </button>
