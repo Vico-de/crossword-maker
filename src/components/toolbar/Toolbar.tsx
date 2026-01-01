@@ -84,6 +84,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         borderColor: appearance.borderColor,
         separatorColor: appearance.separatorColor
     });
+    const [isEditingColor, setIsEditingColor] = useState(false);
     const gridFontFileInput = useRef<HTMLInputElement | null>(null);
     const definitionFontFileInput = useRef<HTMLInputElement | null>(null);
     const setFileInput = useRef<HTMLInputElement | null>(null);
@@ -100,19 +101,20 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     }, [currentGrid]);
 
     useEffect(() => {
-        setColorDrafts((prev) => ({
-            ...prev,
-            blackCellColor: appearance.blackCellColor,
-            cellBackgroundColor: appearance.cellBackgroundColor,
-            arrowColor: appearance.arrowColor,
-            letterColor: appearance.letterColor,
-            definitionTextColor: appearance.definitionTextColor,
-            borderColor: appearance.borderColor,
-            separatorColor: appearance.separatorColor
-        }));
+        if (!isEditingColor) {
+            setColorDrafts({
+                blackCellColor: appearance.blackCellColor,
+                cellBackgroundColor: appearance.cellBackgroundColor,
+                arrowColor: appearance.arrowColor,
+                letterColor: appearance.letterColor,
+                definitionTextColor: appearance.definitionTextColor,
+                borderColor: appearance.borderColor,
+                separatorColor: appearance.separatorColor
+            });
+        }
         setGridFontCustom(appearance.gridFont);
         setDefinitionFontCustom(appearance.definitionFont);
-    }, [appearance]);
+    }, [appearance, isEditingColor]);
 
     const handleSave = () => {
         if (!gridName.trim() || !currentGrid) return;
@@ -254,7 +256,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     };
 
     const resolveColorValue = (key: ColorKey) => {
-        return normalizeHex(colorDrafts[key]) || normalizeHex(appearance[key]) || '#000000';
+        const normalizedDraft = normalizeHex(colorDrafts[key]);
+        if (normalizedDraft) return normalizedDraft;
+        const normalizedAppearance = normalizeHex(appearance[key]);
+        if (normalizedAppearance) return normalizedAppearance;
+        return '#000000';
     };
 
     const selectedFontValue = (current: string) => {
@@ -476,23 +482,39 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             <div key={key} className="color-field">
                                 <label>{label}</label>
                                 <div className="color-inputs">
-                                    <input
-                                        type="color"
-                                        value={resolveColorValue(key)}
-                                        onChange={(e) => handleAppearanceFieldChange(key, e.target.value, true)}
-                                        onFocus={() => onInputFocus(true)}
-                                        onBlur={() => onInputFocus(false)}
-                                        aria-label={label}
-                                    />
-                                    <input
-                                        type="text"
-                                        value={colorDrafts[key]}
-                                        onChange={(e) => handleAppearanceFieldChange(key, e.target.value)}
-                                        onFocus={() => onInputFocus(true)}
-                                        onBlur={() => onInputFocus(false)}
-                                        className="color-text-input"
-                                        placeholder="#000000 ou rgb()"
-                                    />
+                                <input
+                                    type="color"
+                                    value={resolveColorValue(key)}
+                                    onChange={(e) => handleAppearanceFieldChange(key, e.target.value, true)}
+                                    onFocus={() => {
+                                        setIsEditingColor(true);
+                                        onInputFocus(true);
+                                    }}
+                                    onBlur={() => {
+                                        setIsEditingColor(false);
+                                        onInputFocus(false);
+                                    }}
+                                    aria-label={label}
+                                />
+                                <input
+                                    type="text"
+                                    value={colorDrafts[key]}
+                                    onChange={(e) => handleAppearanceFieldChange(key, e.target.value)}
+                                    onFocus={() => {
+                                        setIsEditingColor(true);
+                                        onInputFocus(true);
+                                    }}
+                                    onBlur={() => {
+                                        setIsEditingColor(false);
+                                        onInputFocus(false);
+                                        const normalized = normalizeHex(colorDrafts[key]);
+                                        if (normalized && normalized !== appearance[key]) {
+                                            onAppearanceChange({ [key]: normalized });
+                                        }
+                                    }}
+                                    className="color-text-input"
+                                    placeholder="#000000 ou rgb()"
+                                />
                                 </div>
                             </div>
                         ))}
