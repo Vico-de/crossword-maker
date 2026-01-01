@@ -101,7 +101,44 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
                 cells: [...currentCells]
             });
         }
+
+        const contentBytes = encoder.encode(lines.join('\n'));
+        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
+
+        // Construction lisible du dictionnaire de page pour limiter les erreurs de syntaxe.
+        writeObject(page.pageId, buildPageDictionary(page));
+    });
+
+    writeObject(
+        pagesId,
+        `<< /Type /Pages /Count ${preparedPages.length} /Kids [${preparedPages
+            .map((page) => `${page.pageId} 0 R`)
+            .join(' ')}] >>`
+    );
+    writeObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+
+    const xrefStart = byteLength();
+    chunks.push(`xref\n0 ${nextId}\n`);
+    chunks.push('0000000000 65535 f \n');
+    for (let i = 1; i < nextId; i++) {
+        const offset = offsets[i] ?? 0;
+        chunks.push(`${offset.toString().padStart(10, '0')} 00000 n \n`);
     }
+    chunks.push(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+
+    const total = byteLength();
+    const buffer = new Uint8Array(total);
+    let cursor = 0;
+    chunks.forEach((chunk) => {
+        if (typeof chunk === 'string') {
+            const encoded = encoder.encode(chunk);
+            buffer.set(encoded, cursor);
+            cursor += encoded.length;
+        } else {
+            buffer.set(chunk, cursor);
+            cursor += chunk.length;
+        }
+    });
 
     return positions;
 };
@@ -767,21 +804,24 @@ export const CrosswordEditor: React.FC = () => {
         setAppearance((prev) => (areAppearancesEqual(prev, nextAppearance) ? prev : nextAppearance));
     }, [gridSets, currentSetId]);
 
-    useEffect(() => {
-        if (!currentSetId) return;
-        setGridSets((prev) => {
-            let changed = false;
-            const next = prev.map((set) => {
-                if (set.id !== currentSetId) return set;
-                if (areAppearancesEqual(set.appearance || DEFAULT_APPEARANCE, appearance)) {
-                    return set;
+    const handleAppearanceChange = useCallback(
+        (changes: Partial<AppearanceSettings>) => {
+            setAppearance((prev) => {
+                const next = { ...prev, ...changes };
+                if (currentSetId) {
+                    setGridSets((sets) =>
+                        sets.map((set) =>
+                            set.id === currentSetId
+                                ? { ...set, appearance: next }
+                                : set
+                        )
+                    );
                 }
-                changed = true;
-                return { ...set, appearance };
+                return next;
             });
-            return changed ? next : prev;
-        });
-    }, [appearance, currentSetId]);
+        },
+        [currentSetId]
+    );
 
     const resetEditingState = useCallback(() => {
         const size = state.currentGrid?.size || { width: 15, height: 15 };

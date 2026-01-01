@@ -34,7 +34,7 @@
   user-select: none;
   cursor: pointer;
   background-color: var(--grid-cell-color, #fff);
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   box-sizing: border-box;
   color: var(--grid-letter-color, #000);
   border: 1px solid var(--grid-border-color, #ccc);

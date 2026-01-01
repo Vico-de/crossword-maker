@@ -84,7 +84,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         borderColor: appearance.borderColor,
         separatorColor: appearance.separatorColor
     });
-    const [isEditingColor, setIsEditingColor] = useState(false);
     const gridFontFileInput = useRef<HTMLInputElement | null>(null);
     const definitionFontFileInput = useRef<HTMLInputElement | null>(null);
     const setFileInput = useRef<HTMLInputElement | null>(null);
@@ -101,20 +100,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     }, [currentGrid]);
 
     useEffect(() => {
-        if (!isEditingColor) {
-            setColorDrafts({
-                blackCellColor: appearance.blackCellColor,
-                cellBackgroundColor: appearance.cellBackgroundColor,
-                arrowColor: appearance.arrowColor,
-                letterColor: appearance.letterColor,
-                definitionTextColor: appearance.definitionTextColor,
-                borderColor: appearance.borderColor,
-                separatorColor: appearance.separatorColor
-            });
-        }
+        setColorDrafts({
+            blackCellColor: appearance.blackCellColor,
+            cellBackgroundColor: appearance.cellBackgroundColor,
+            arrowColor: appearance.arrowColor,
+            letterColor: appearance.letterColor,
+            definitionTextColor: appearance.definitionTextColor,
+            borderColor: appearance.borderColor,
+            separatorColor: appearance.separatorColor
+        });
         setGridFontCustom(appearance.gridFont);
         setDefinitionFontCustom(appearance.definitionFont);
-    }, [appearance, isEditingColor]);
+    }, [appearance]);
 
     const handleSave = () => {
         if (!gridName.trim() || !currentGrid) return;
@@ -240,27 +237,28 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         );
     };
 
-    const handleAppearanceFieldChange = (key: keyof AppearanceSettings, value: string, force = false) => {
-        if (key === 'gridFont' || key === 'definitionFont') {
-            onAppearanceChange({ [key]: value });
-            return;
-        }
+    const sanitizeColor = (value: string, fallback: string) => {
+        const normalized = normalizeHex(value);
+        if (normalized) return normalized;
+        const trimmed = value.trim();
+        if (isValidColor(trimmed)) return trimmed;
+        return fallback;
+    };
 
-        const colorKey = key as ColorKey;
-        setColorDrafts((prev) => ({ ...prev, [colorKey]: value }));
-
-        if (force || isValidColor(value)) {
-            const normalized = normalizeHex(value) ?? value;
-            onAppearanceChange({ [colorKey]: normalized });
+    const commitColor = (key: ColorKey, value: string) => {
+        const sanitized = sanitizeColor(value, appearance[key]);
+        setColorDrafts((prev) => ({ ...prev, [key]: sanitized }));
+        if (sanitized !== appearance[key]) {
+            onAppearanceChange({ [key]: sanitized });
         }
     };
 
-    const resolveColorValue = (key: ColorKey) => {
-        const normalizedDraft = normalizeHex(colorDrafts[key]);
-        if (normalizedDraft) return normalizedDraft;
-        const normalizedAppearance = normalizeHex(appearance[key]);
-        if (normalizedAppearance) return normalizedAppearance;
-        return '#000000';
+    const resolveColorValue = (key: ColorKey) =>
+        normalizeHex(colorDrafts[key]) ?? normalizeHex(appearance[key]) ?? '#000000';
+
+    const applyFontChange = (key: 'gridFont' | 'definitionFont', value: string) => {
+        const nextValue = value.trim() || appearance[key];
+        onAppearanceChange({ [key]: nextValue });
     };
 
     const selectedFontValue = (current: string) => {
@@ -279,10 +277,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             const fontValue = `'${fontName}'`;
             if (target === 'grid') {
                 setGridFontCustom(fontValue);
-                handleAppearanceFieldChange('gridFont', fontValue);
+                applyFontChange('gridFont', fontValue);
             } else {
                 setDefinitionFontCustom(fontValue);
-                handleAppearanceFieldChange('definitionFont', fontValue);
+                applyFontChange('definitionFont', fontValue);
             }
         } catch (error) {
             console.error('Erreur lors du chargement de la police :', error);
@@ -482,39 +480,28 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             <div key={key} className="color-field">
                                 <label>{label}</label>
                                 <div className="color-inputs">
-                                <input
-                                    type="color"
-                                    value={resolveColorValue(key)}
-                                    onChange={(e) => handleAppearanceFieldChange(key, e.target.value, true)}
-                                    onFocus={() => {
-                                        setIsEditingColor(true);
-                                        onInputFocus(true);
-                                    }}
-                                    onBlur={() => {
-                                        setIsEditingColor(false);
-                                        onInputFocus(false);
-                                    }}
-                                    aria-label={label}
-                                />
-                                <input
-                                    type="text"
-                                    value={colorDrafts[key]}
-                                    onChange={(e) => handleAppearanceFieldChange(key, e.target.value)}
-                                    onFocus={() => {
-                                        setIsEditingColor(true);
-                                        onInputFocus(true);
-                                    }}
-                                    onBlur={() => {
-                                        setIsEditingColor(false);
-                                        onInputFocus(false);
-                                        const normalized = normalizeHex(colorDrafts[key]);
-                                        if (normalized && normalized !== appearance[key]) {
-                                            onAppearanceChange({ [key]: normalized });
+                                    <input
+                                        type="color"
+                                        value={resolveColorValue(key)}
+                                        onChange={(e) => commitColor(key, e.target.value)}
+                                        onFocus={() => onInputFocus(true)}
+                                        onBlur={() => onInputFocus(false)}
+                                        aria-label={label}
+                                    />
+                                    <input
+                                        type="text"
+                                        value={colorDrafts[key]}
+                                        onChange={(e) =>
+                                            setColorDrafts((prev) => ({ ...prev, [key]: e.target.value }))
                                         }
-                                    }}
-                                    className="color-text-input"
-                                    placeholder="#000000 ou rgb()"
-                                />
+                                        onFocus={() => onInputFocus(true)}
+                                        onBlur={() => {
+                                            commitColor(key, colorDrafts[key]);
+                                            onInputFocus(false);
+                                        }}
+                                        className="color-text-input"
+                                        placeholder="#000000 ou rgb()"
+                                    />
                                 </div>
                             </div>
                         ))}
@@ -529,7 +516,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                     if (value === 'custom') {
                                         triggerFontUpload('grid');
                                     } else {
-                                        onAppearanceChange({ gridFont: value });
+                                        applyFontChange('gridFont', value);
                                     }
                                 }}
                                 onFocus={() => onInputFocus(true)}
@@ -548,7 +535,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         value={gridFontCustom}
                                         onChange={(e) => {
                                             setGridFontCustom(e.target.value);
-                                            handleAppearanceFieldChange('gridFont', e.target.value);
+                                            applyFontChange('gridFont', e.target.value);
                                         }}
                                         onFocus={() => onInputFocus(true)}
                                         onBlur={() => onInputFocus(false)}
@@ -576,7 +563,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                     if (value === 'custom') {
                                         triggerFontUpload('definition');
                                     } else {
-                                        onAppearanceChange({ definitionFont: value });
+                                        applyFontChange('definitionFont', value);
                                     }
                                 }}
                                 onFocus={() => onInputFocus(true)}
@@ -595,7 +582,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         value={definitionFontCustom}
                                         onChange={(e) => {
                                             setDefinitionFontCustom(e.target.value);
-                                            handleAppearanceFieldChange('definitionFont', e.target.value);
+                                            applyFontChange('definitionFont', e.target.value);
                                         }}
                                         onFocus={() => onInputFocus(true)}
                                         onBlur={() => onInputFocus(false)}
