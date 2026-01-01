@@ -101,7 +101,44 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
                 cells: [...currentCells]
             });
         }
+
+        const contentBytes = encoder.encode(lines.join('\n'));
+        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
+
+        // Construction lisible du dictionnaire de page pour limiter les erreurs de syntaxe.
+        writeObject(page.pageId, buildPageDictionary(page));
+    });
+
+    writeObject(
+        pagesId,
+        `<< /Type /Pages /Count ${preparedPages.length} /Kids [${preparedPages
+            .map((page) => `${page.pageId} 0 R`)
+            .join(' ')}] >>`
+    );
+    writeObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+
+    const xrefStart = byteLength();
+    chunks.push(`xref\n0 ${nextId}\n`);
+    chunks.push('0000000000 65535 f \n');
+    for (let i = 1; i < nextId; i++) {
+        const offset = offsets[i] ?? 0;
+        chunks.push(`${offset.toString().padStart(10, '0')} 00000 n \n`);
     }
+    chunks.push(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+
+    const total = byteLength();
+    const buffer = new Uint8Array(total);
+    let cursor = 0;
+    chunks.forEach((chunk) => {
+        if (typeof chunk === 'string') {
+            const encoded = encoder.encode(chunk);
+            buffer.set(encoded, cursor);
+            cursor += encoded.length;
+        } else {
+            buffer.set(chunk, cursor);
+            cursor += chunk.length;
+        }
+    });
 
     return positions;
 };
@@ -1134,6 +1171,10 @@ export const CrosswordEditor: React.FC = () => {
 
     const handleResize = (width: number, height: number) => {
         dispatch({ type: 'RESIZE_GRID', payload: { width, height } });
+    };
+
+    const handleAppearanceChange = (changes: Partial<AppearanceSettings>) => {
+        setAppearance((prev) => ({ ...prev, ...changes }));
     };
 
     const toggleDirection = () => {
