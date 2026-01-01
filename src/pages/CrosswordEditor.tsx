@@ -101,7 +101,55 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
                 cells: [...currentCells]
             });
         }
+
+        const contentBytes = encoder.encode(lines.join('\n'));
+        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
+
+        const resourcesParts = [
+            `/XObject << /${page.name} ${page.imageId} 0 R >>`,
+            `/ProcSet [ /PDF ${fontId ? '/Text ' : ''}/ImageC ]`
+        ];
+        if (fontId) resourcesParts.push(`/Font << /F1 ${fontId} 0 R >>`);
+
+        // Dictionnaire de page isolé pour éviter les parenthèses imbriquées difficiles à relire.
+        const resourceDict = `<< ${resourcesParts.join(' ')} >>`;
+        const pageDict =
+            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${resourceDict} ` +
+            `/MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`;
+
+        writeObject(page.pageId, pageDict);
+    });
+
+    writeObject(
+        pagesId,
+        `<< /Type /Pages /Count ${preparedPages.length} /Kids [${preparedPages
+            .map((page) => `${page.pageId} 0 R`)
+            .join(' ')}] >>`
+    );
+    writeObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+
+    const xrefStart = byteLength();
+    chunks.push(`xref\n0 ${nextId}\n`);
+    chunks.push('0000000000 65535 f \n');
+    for (let i = 1; i < nextId; i++) {
+        const offset = offsets[i] ?? 0;
+        chunks.push(`${offset.toString().padStart(10, '0')} 00000 n \n`);
     }
+    chunks.push(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+
+    const total = byteLength();
+    const buffer = new Uint8Array(total);
+    let cursor = 0;
+    chunks.forEach((chunk) => {
+        if (typeof chunk === 'string') {
+            const encoded = encoder.encode(chunk);
+            buffer.set(encoded, cursor);
+            cursor += encoded.length;
+        } else {
+            buffer.set(chunk, cursor);
+            cursor += chunk.length;
+        }
+    });
 
     return positions;
 };
