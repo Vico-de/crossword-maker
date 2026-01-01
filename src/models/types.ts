@@ -31,6 +31,20 @@ export interface Cell {
     // ajoutez d'autres propriétés si nécessaire
 }
 
+export interface WordDefinitionPlacement {
+    x: number;
+    y: number;
+    direction: 'up' | 'down' | 'left' | 'right';
+    anchor: { x: number; y: number };
+    anchorRole: 'start' | 'end';
+    wordDirection: 'horizontal' | 'vertical';
+}
+
+export interface WordDefinitionData {
+    definition: string;
+    placement?: WordDefinitionPlacement;
+}
+
 // Représente la grille complète
 export interface Grid {
     cells: Cell[][];
@@ -105,4 +119,22 @@ export interface SavedGrid {
     name: string;
     timestamp: number;
     grid: Grid;
+    definitions?: Record<string, WordDefinitionData>;
+}
+
+export interface GridSet {
+    id: string;
+    name: string;
+    grids: SavedGrid[];
+    appearance?: {
+        blackCellColor: string;
+        cellBackgroundColor: string;
+        arrowColor: string;
+        letterColor: string;
+        definitionTextColor: string;
+        borderColor: string;
+        separatorColor: string;
+        gridFont: string;
+        definitionFont: string;
+    };
 }
