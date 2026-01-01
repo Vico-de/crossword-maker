@@ -767,7 +767,7 @@ export const CrosswordEditor: React.FC = () => {
         setAppearance((prev) => (areAppearancesEqual(prev, nextAppearance) ? prev : nextAppearance));
     }, [gridSets, currentSetId]);
 
-    const handleAppearanceChange = useCallback(
+    const applyAppearanceChanges = useCallback(
         (changes: Partial<AppearanceSettings>) => {
             setAppearance((prev) => {
                 const next = { ...prev, ...changes };
@@ -1402,7 +1402,7 @@ export const CrosswordEditor: React.FC = () => {
                 definitions={filteredDefinitions}
                 onInputFocus={setIsToolbarInputActive}
                 appearance={appearance}
-                onAppearanceChange={handleAppearanceChange}
+                onAppearanceChange={applyAppearanceChanges}
                 savedGrids={savedGrids}
                 onSavedGridsChange={handleSavedGridsChange}
                 onGridLoad={handleGridLoad}
