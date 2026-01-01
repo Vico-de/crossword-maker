@@ -101,44 +101,7 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
                 cells: [...currentCells]
             });
         }
-
-        const contentBytes = encoder.encode(lines.join('\n'));
-        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
-
-        // Construction lisible du dictionnaire de page pour limiter les erreurs de syntaxe.
-        writeObject(page.pageId, buildPageDictionary(page));
-    });
-
-    writeObject(
-        pagesId,
-        `<< /Type /Pages /Count ${preparedPages.length} /Kids [${preparedPages
-            .map((page) => `${page.pageId} 0 R`)
-            .join(' ')}] >>`
-    );
-    writeObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
-
-    const xrefStart = byteLength();
-    chunks.push(`xref\n0 ${nextId}\n`);
-    chunks.push('0000000000 65535 f \n');
-    for (let i = 1; i < nextId; i++) {
-        const offset = offsets[i] ?? 0;
-        chunks.push(`${offset.toString().padStart(10, '0')} 00000 n \n`);
     }
-    chunks.push(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
-
-    const total = byteLength();
-    const buffer = new Uint8Array(total);
-    let cursor = 0;
-    chunks.forEach((chunk) => {
-        if (typeof chunk === 'string') {
-            const encoded = encoder.encode(chunk);
-            buffer.set(encoded, cursor);
-            cursor += encoded.length;
-        } else {
-            buffer.set(chunk, cursor);
-            cursor += chunk.length;
-        }
-    });
 
     return positions;
 };
@@ -573,21 +536,21 @@ const buildPdfDocument = (pages: PdfPage[]) => {
     }
 
     const buildPageDictionary = (page: typeof preparedPages[number]) => {
-        const resourcesParts = [
+        const resources: string[] = [
             `/XObject << /${page.name} ${page.imageId} 0 R >>`,
-            `/ProcSet [ /PDF ${fontId ? '/Text ' : ''}/ImageC ]`
+            fontId ? '/ProcSet [ /PDF /Text /ImageC ]' : '/ProcSet [ /PDF /ImageC ]'
         ];
-        if (fontId) resourcesParts.push(`/Font << /F1 ${fontId} 0 R >>`);
+        if (fontId) resources.push(`/Font << /F1 ${fontId} 0 R >>`);
 
-        const entries = [
+        return [
+            '<<',
             '/Type /Page',
             `/Parent ${pagesId} 0 R`,
-            `/Resources << ${resourcesParts.join(' ')} >>`,
+            `/Resources << ${resources.join(' ')} >>`,
             `/MediaBox [0 0 ${page.width} ${page.mediaHeight}]`,
-            `/Contents ${page.contentId} 0 R`
-        ];
-
-        return `<< ${entries.join(' ')} >>`;
+            `/Contents ${page.contentId} 0 R`,
+            '>>'
+        ].join(' ');
     };
 
     preparedPages.forEach((page) => {
