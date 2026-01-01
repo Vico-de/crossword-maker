@@ -306,35 +306,45 @@ const buildPlacementsForGrid = (
     return { definitionPlacements, arrowPlacements };
 };
 
-const renderGridCanvas = (
+const escapePdfText = (text: string) =>
+    text.replace(/[\\()]/g, (char) => {
+        if (char === '\\') return '\\';
+        if (char === '(') return '\(';
+        return '\)';
+    });
+
+const hexToRgb = (hex: string): [number, number, number] => {
+    const normalized = hex.replace('#', '');
+    const value = normalized.length === 3
+        ? normalized
+              .split('')
+              .map((c) => c + c)
+              .join('')
+        : normalized.padEnd(6, '0');
+    const intVal = parseInt(value, 16);
+    return [((intVal >> 16) & 255) / 255, ((intVal >> 8) & 255) / 255, (intVal & 255) / 255];
+};
+
+type PdfPage = { width: number; height: number; content: string };
+
+const renderGridPdfPage = (
     grid: Grid,
     definitions: Record<string, WordDefinitionData>,
     appearance: AppearanceSettings,
-    scale = 2
-): HTMLCanvasElement => {
-// -----------------------------------------------------------------------------
-// Export PDF : rendu canvas + sérialisation PDF minimaliste
-// -----------------------------------------------------------------------------
-// Canvas haute résolution pour des exports PDF nets sans dépendance externe.
+    label?: string
+): PdfPage => {
     const baseCell = 40;
-    const canvas = document.createElement('canvas');
-    const boardWidth = grid.size.width * baseCell;
-    const boardHeight = grid.size.height * baseCell;
-    canvas.width = boardWidth * scale;
-    canvas.height = boardHeight * scale;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return canvas;
-
     const cellSize = baseCell;
-
-    ctx.scale(scale, scale);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, boardWidth, boardHeight);
+    const boardWidth = grid.size.width * cellSize;
+    const boardHeight = grid.size.height * cellSize;
+    const labelHeight = label ? 28 : 0;
+    const mediaHeight = boardHeight + labelHeight;
 
     const { definitionPlacements, arrowPlacements } = buildPlacementsForGrid(grid, definitions);
+    const measureCtx = document.createElement('canvas').getContext('2d');
 
     const fitDefinitionSize = (text: string, slotCount: number) => {
+        if (!measureCtx) return 12;
         const availableWidth = cellSize - 6;
         const availableHeight = (cellSize - 6) / Math.max(1, slotCount) - 2;
         const words = text.split(/\s+/).filter(Boolean);
@@ -342,13 +352,13 @@ const renderGridCanvas = (
         const upperBound = Math.min(18, availableHeight, longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18);
 
         for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
-            ctx.font = `${size}px ${appearance.definitionFont}`;
-            const spaceWidth = ctx.measureText(' ').width;
+            measureCtx.font = `${size}px ${appearance.definitionFont}`;
+            const spaceWidth = measureCtx.measureText(' ').width;
             let lines = 1;
             let width = 0;
             let fits = true;
             for (const word of words) {
-                const w = ctx.measureText(word).width;
+                const w = measureCtx.measureText(word).width;
                 if (w > availableWidth) {
                     fits = false;
                     break;
@@ -373,91 +383,112 @@ const renderGridCanvas = (
         return 4;
     };
 
+    const rgbFill = (hex: string) => {
+        const [r, g, b] = hexToRgb(hex);
+        return `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg`;
+    };
+    const rgbStroke = (hex: string) => {
+        const [r, g, b] = hexToRgb(hex);
+        return `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG`;
+    };
+
+    const lines: string[] = [];
+
+    if (label) {
+        lines.push('/F1 12 Tf');
+        lines.push(rgbFill(appearance.letterColor));
+        lines.push('BT');
+        lines.push(`12 ${(mediaHeight - 14).toFixed(2)} Td`);
+        lines.push(`(${escapePdfText(label)}) Tj`);
+        lines.push('ET');
+    }
+
+    lines.push('q');
+    lines.push(`1 0 0 -1 0 ${mediaHeight} cm`);
+
     grid.cells.forEach((row, y) => {
         row.forEach((cell, x) => {
             const posX = x * cellSize;
-            const posY = y * cellSize;
-            ctx.fillStyle = appearance.cellBackgroundColor;
-            ctx.fillRect(posX, posY, cellSize, cellSize);
-            if (cell.isBlack) {
-                ctx.fillStyle = appearance.blackCellColor;
-                ctx.fillRect(posX, posY, cellSize, cellSize);
+            const posY = y * cellSize + labelHeight;
 
+            lines.push(rgbFill(cell.isBlack ? appearance.blackCellColor : appearance.cellBackgroundColor));
+            lines.push(`${posX.toFixed(2)} ${posY.toFixed(2)} ${cellSize.toFixed(2)} ${cellSize.toFixed(2)} re f`);
+
+            if (cell.isBlack) {
                 const key = `${x}-${y}`;
                 const cellDefs = definitionPlacements[key];
-                if (cellDefs && cellDefs.length > 0) {
+                if (cellDefs && cellDefs.length > 0 && measureCtx) {
                     const slots = cellDefs.length;
                     cellDefs.forEach((def, index) => {
                         const startY = posY + (cellSize / slots) * index;
                         const areaHeight = cellSize / slots;
-                        const fontSize = fitDefinitionSize((def.definition || def.word).toUpperCase(), slots);
-                        ctx.fillStyle = appearance.definitionTextColor;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.font = `${fontSize}px ${appearance.definitionFont}`;
-
-                        const words = (def.definition || def.word).toUpperCase().split(/\s+/).filter(Boolean);
+                        const content = (def.definition || def.word).toUpperCase();
+                        const fontSize = fitDefinitionSize(content, slots);
+                        const words = content.split(/\s+/).filter(Boolean);
                         const availableWidth = cellSize - 6;
-                        const lines: string[] = [];
+                        const textLines: string[] = [];
                         let current = '';
-
+                        measureCtx.font = `${fontSize}px ${appearance.definitionFont}`;
                         words.forEach((word) => {
                             const tentative = current ? `${current} ${word}` : word;
-                            if (ctx.measureText(tentative).width <= availableWidth) {
+                            if (measureCtx.measureText(tentative).width <= availableWidth) {
                                 current = tentative;
                             } else {
-                                if (current) lines.push(current);
+                                if (current) textLines.push(current);
                                 current = word;
                             }
                         });
-                        if (current) lines.push(current);
+                        if (current) textLines.push(current);
 
-                        lines.forEach((line, lineIndex) => {
-                            ctx.fillText(line, posX + cellSize / 2, startY + areaHeight / 2 + (lineIndex - (lines.length - 1) / 2) * (fontSize * 1.1));
+                        lines.push(rgbFill(appearance.definitionTextColor));
+                        lines.push(`/F1 ${fontSize.toFixed(2)} Tf`);
+                        textLines.forEach((line, lineIndex) => {
+                            const centerY = startY + areaHeight / 2 + (lineIndex - (textLines.length - 1) / 2) * (fontSize * 1.1);
+                            lines.push('BT');
+                            lines.push(`${(posX + cellSize / 2).toFixed(2)} ${centerY.toFixed(2)} Td`);
+                            lines.push(`(${escapePdfText(line)}) Tj`);
+                            lines.push('ET');
                         });
                     });
 
                     if (cellDefs.length > 1) {
-                        ctx.strokeStyle = appearance.separatorColor;
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.moveTo(posX, posY + cellSize / 2);
-                        ctx.lineTo(posX + cellSize, posY + cellSize / 2);
-                        ctx.stroke();
+                        lines.push(rgbStroke(appearance.separatorColor));
+                        lines.push('1 w');
+                        const sepY = posY + cellSize / 2;
+                        lines.push(`${posX.toFixed(2)} ${sepY.toFixed(2)} m ${(posX + cellSize).toFixed(2)} ${sepY.toFixed(2)} l S`);
                     }
                 }
             } else if (cell.value) {
-                ctx.fillStyle = appearance.letterColor;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.font = `${cellSize * 0.55}px ${appearance.gridFont}`;
-                ctx.fillText(cell.value, posX + cellSize / 2, posY + cellSize / 2 + 1);
+                const fontSize = cellSize * 0.55;
+                lines.push(rgbFill(appearance.letterColor));
+                lines.push(`/F1 ${fontSize.toFixed(2)} Tf`);
+                lines.push('BT');
+                lines.push(`${(posX + cellSize / 2).toFixed(2)} ${(posY + cellSize / 2 + 1).toFixed(2)} Td`);
+                lines.push(`(${escapePdfText(cell.value)}) Tj`);
+                lines.push('ET');
             }
         });
     });
 
-    ctx.strokeStyle = appearance.borderColor;
-    ctx.lineWidth = 1 / scale;
-    ctx.beginPath();
+    lines.push(rgbStroke(appearance.borderColor));
+    lines.push('1 w');
     for (let x = 0; x <= grid.size.width; x++) {
-        ctx.moveTo(x * cellSize + 0.5, 0);
-        ctx.lineTo(x * cellSize + 0.5, boardHeight);
+        const px = x * cellSize + 0.5;
+        lines.push(`${px.toFixed(2)} ${labelHeight.toFixed(2)} m ${px.toFixed(2)} ${(boardHeight + labelHeight).toFixed(2)} l S`);
     }
     for (let y = 0; y <= grid.size.height; y++) {
-        ctx.moveTo(0, y * cellSize + 0.5);
-        ctx.lineTo(boardWidth, y * cellSize + 0.5);
+        const py = y * cellSize + 0.5 + labelHeight;
+        lines.push(`0 ${py.toFixed(2)} m ${boardWidth.toFixed(2)} ${py.toFixed(2)} l S`);
     }
-    ctx.stroke();
 
     Object.entries(arrowPlacements).forEach(([key, arrows]) => {
         const [targetX, targetY] = key.split('-').map(Number);
         const centerX = targetX * cellSize + cellSize / 2;
-        const centerY = targetY * cellSize + cellSize / 2;
+        const centerY = targetY * cellSize + cellSize / 2 + labelHeight;
         const offset = cellSize * 0.35;
-        ctx.fillStyle = appearance.arrowColor;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `${cellSize * 0.32}px ${appearance.gridFont}`;
+        const fontSize = cellSize * 0.32;
+        lines.push(rgbFill(appearance.arrowColor));
+        lines.push(`/F1 ${fontSize.toFixed(2)} Tf`);
 
         arrows.forEach((arrow) => {
             const dx = arrow.attachment === 'left' ? -offset : arrow.attachment === 'right' ? offset : 0;
@@ -468,34 +499,27 @@ const renderGridCanvas = (
                         ? '↲'
                         : '↰'
                     : arrow.variant === 'curved-right'
-                      ? arrow.direction === 'down'
-                          ? '↳'
-                          : '↱'
-                      : arrow.direction === 'left'
-                        ? '←'
-                        : arrow.direction === 'right'
-                          ? '→'
-                          : arrow.direction === 'up'
-                            ? '↑'
-                            : '↓';
-            ctx.fillText(char, centerX + dx, centerY + dy);
+                        ? arrow.direction === 'down'
+                            ? '↳'
+                            : '↱'
+                        : arrow.direction === 'left'
+                            ? '←'
+                            : arrow.direction === 'right'
+                                ? '→'
+                                : arrow.direction === 'up'
+                                    ? '↑'
+                                    : '↓';
+            lines.push('BT');
+            lines.push(`${(centerX + dx).toFixed(2)} ${(centerY + dy).toFixed(2)} Td`);
+            lines.push(`(${escapePdfText(char)}) Tj`);
+            lines.push('ET');
         });
     });
 
-    return canvas;
+    lines.push('Q');
+
+    return { width: boardWidth, height: mediaHeight, content: lines.join('\n') };
 };
-
-const dataUrlToUint8 = (dataUrl: string): Uint8Array => {
-    const base64 = dataUrl.split(',')[1];
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-};
-
-const escapePdfText = (text: string) => text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-
-type PdfPage = { width: number; height: number; dataUrl: string; label?: string };
 
 const buildPdfDocument = (pages: PdfPage[]) => {
     const encoder = new TextEncoder();
@@ -516,70 +540,35 @@ const buildPdfDocument = (pages: PdfPage[]) => {
         chunks.push('\nendstream\nendobj\n');
     };
 
-    const needsFont = pages.some((page) => page.label);
     const catalogId = 1;
     const pagesId = 2;
-    const fontId = needsFont ? 3 : null;
-    let nextId = needsFont ? 4 : 3;
+    const fontId = 3;
+    let nextId = 4;
 
-    const preparedPages = pages.map((page, index) => {
-        const imageId = nextId++;
-        const contentId = nextId++;
-        const pageId = nextId++;
-        const mediaHeight = page.height + (page.label ? 28 : 0);
-        const name = `Im${index}`;
-        return { ...page, index, imageId, contentId, pageId, mediaHeight, name };
-    });
+    const preparedPages = pages.map((page) => ({
+        ...page,
+        pageId: nextId++,
+        contentId: nextId++
+    }));
 
-    if (fontId) {
-        writeObject(fontId, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-    }
+    writeObject(fontId, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
 
-    const buildPageDictionary = (page: typeof preparedPages[number]) => {
-        const resources: string[] = [
-            `/XObject << /${page.name} ${page.imageId} 0 R >>`,
-            fontId ? '/ProcSet [ /PDF /Text /ImageC ]' : '/ProcSet [ /PDF /ImageC ]'
-        ];
-        if (fontId) resources.push(`/Font << /F1 ${fontId} 0 R >>`);
+    preparedPages.forEach((page) => {
+        const contentBytes = encoder.encode(page.content);
+        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
 
-        return [
+        const resources = ['/ProcSet [ /PDF /Text ]', `/Font << /F1 ${fontId} 0 R >>`];
+        const pageDict = [
             '<<',
             '/Type /Page',
             `/Parent ${pagesId} 0 R`,
             `/Resources << ${resources.join(' ')} >>`,
-            `/MediaBox [0 0 ${page.width} ${page.mediaHeight}]`,
+            `/MediaBox [0 0 ${page.width} ${page.height}]`,
             `/Contents ${page.contentId} 0 R`,
             '>>'
         ].join(' ');
-    };
 
-    preparedPages.forEach((page) => {
-        const imageBytes = dataUrlToUint8(page.dataUrl);
-
-        // Image binaire encodée en JPEG.
-        writeStream(
-            page.imageId,
-            `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>`,
-            imageBytes
-        );
-
-        // Flux de dessin : place l'image puis ajoute éventuellement un libellé.
-        const lines = ['q', `${page.width} 0 0 ${page.height} 0 0 cm`, `/${page.name} Do`, 'Q'];
-
-        if (page.label) {
-            const y = page.mediaHeight - 14;
-            lines.push('BT');
-            lines.push('/F1 12 Tf');
-            lines.push(`12 ${y.toFixed(2)} Td`);
-            lines.push(`(${escapePdfText(page.label)}) Tj`);
-            lines.push('ET');
-        }
-
-        const contentBytes = encoder.encode(lines.join('\n'));
-        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
-
-        // Construction lisible du dictionnaire de page pour limiter les erreurs de syntaxe.
-        writeObject(page.pageId, buildPageDictionary(page));
+        writeObject(page.pageId, pageDict);
     });
 
     writeObject(
@@ -614,16 +603,6 @@ const buildPdfDocument = (pages: PdfPage[]) => {
     });
 
     return new Blob([buffer], { type: 'application/pdf' });
-};
-
-const downloadPdf = (pages: PdfPage[], filename: string) => {
-    const blob = buildPdfDocument(pages);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
 };
 
 const serializeSet = (set: GridSet, appearance: AppearanceSettings) => {
@@ -878,19 +857,9 @@ export const CrosswordEditor: React.FC = () => {
             return;
         }
         try {
-            const canvas = renderGridCanvas(state.currentGrid, filteredDefinitions, appearance);
             const gridName = (state.currentGrid.name || 'grille').trim() || 'grille';
-            downloadPdf(
-                [
-                    {
-                        width: canvas.width,
-                        height: canvas.height,
-                        dataUrl: canvas.toDataURL('image/jpeg', 0.98),
-                        label: gridName
-                    }
-                ],
-                `${gridName.replace(/\s+/g, '_').toLowerCase()}.pdf`
-            );
+            const page = renderGridPdfPage(state.currentGrid, filteredDefinitions, appearance, gridName);
+            downloadPdf([page], `${gridName.replace(/\s+/g, '_').toLowerCase()}.pdf`);
         } catch (error) {
             console.error('Export PDF', error);
             window.alert('Export PDF impossible : impossible de générer le fichier localement.');
@@ -910,15 +879,9 @@ export const CrosswordEditor: React.FC = () => {
         }
 
         try {
-            const pages: PdfPage[] = targets.map((entry) => {
-                const canvas = renderGridCanvas(entry.grid, entry.definitions || {}, appearance);
-                return {
-                    width: canvas.width,
-                    height: canvas.height,
-                    dataUrl: canvas.toDataURL('image/jpeg', 0.98),
-                    label: entry.name
-                };
-            });
+            const pages: PdfPage[] = targets.map((entry) =>
+                renderGridPdfPage(entry.grid, entry.definitions || {}, appearance, entry.name)
+            );
 
             const setLabel = (currentSetName || 'set').replace(/\s+/g, '_').toLowerCase();
             downloadPdf(pages, `${setLabel}-grilles.pdf`);
