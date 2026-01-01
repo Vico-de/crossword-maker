@@ -102,10 +102,22 @@ const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
             });
         }
 
-        writeObject(
-            page.pageId,
-            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${`<< ${resourcesParts.join(' ')} >>`} /MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`
-        );
+        const contentBytes = encoder.encode(lines.join('\n'));
+        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
+
+        const resourcesParts = [
+            `/XObject << /${page.name} ${page.imageId} 0 R >>`,
+            `/ProcSet [ /PDF ${fontId ? '/Text ' : ''}/ImageC ]`
+        ];
+        if (fontId) resourcesParts.push(`/Font << /F1 ${fontId} 0 R >>`);
+
+        // Dictionnaire de page isolé pour éviter les parenthèses imbriquées difficiles à relire.
+        const resourceDict = `<< ${resourcesParts.join(' ')} >>`;
+        const pageDict =
+            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${resourceDict} ` +
+            `/MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`;
+
+        writeObject(page.pageId, pageDict);
     });
 
     writeObject(
@@ -602,13 +614,16 @@ const buildPdfDocument = (pages: PdfPage[]) => {
         ];
         if (fontId) resourcesParts.push(`/Font << /F1 ${fontId} 0 R >>`);
 
-        // Dictionnaire de page isolé pour éviter les parenthèses imbriquées difficiles à relire.
-        const resourceDict = `<< ${resourcesParts.join(' ')} >>`;
-        const pageDict =
-            `<< /Type /Page /Parent ${pagesId} 0 R /Resources ${resourceDict} ` +
-            `/MediaBox [0 0 ${page.width} ${page.mediaHeight}] /Contents ${page.contentId} 0 R >>`;
+        // Construction lisible du dictionnaire de page pour limiter les erreurs de syntaxe.
+        const pageEntries = [
+            '/Type /Page',
+            `/Parent ${pagesId} 0 R`,
+            `/Resources << ${resourcesParts.join(' ')} >>`,
+            `/MediaBox [0 0 ${page.width} ${page.mediaHeight}]`,
+            `/Contents ${page.contentId} 0 R`
+        ];
 
-        writeObject(page.pageId, pageDict);
+        writeObject(page.pageId, `<< ${pageEntries.join(' ')} >>`);
     });
 
     writeObject(
