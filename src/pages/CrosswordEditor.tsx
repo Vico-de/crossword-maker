@@ -1136,6 +1136,10 @@ export const CrosswordEditor: React.FC = () => {
         dispatch({ type: 'RESIZE_GRID', payload: { width, height } });
     };
 
+    const handleAppearanceChange = (changes: Partial<AppearanceSettings>) => {
+        setAppearance((prev) => ({ ...prev, ...changes }));
+    };
+
     const toggleDirection = () => {
         dispatch({
             type: 'SET_DIRECTION',
