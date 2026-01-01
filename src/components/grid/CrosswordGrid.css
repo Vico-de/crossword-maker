@@ -1,6 +1,6 @@
 .crossword-grid {
   flex: 2;
-  background-color: var(--grid-border-color, #ccc);
+  background-color: transparent;
   padding: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: auto;
@@ -8,7 +8,7 @@
   border-radius: 0;
   border: 1px solid var(--grid-border-color, #ccc);
   display: grid;
-  gap: 1px;
+  gap: 0;
   width: max-content;
   height: max-content;
 }
@@ -37,7 +37,8 @@
   transition: all 0.2s ease;
   box-sizing: border-box;
   color: var(--grid-letter-color, #000);
-  border: none;
+  border: 1px solid var(--grid-border-color, #ccc);
+  margin: -0.5px;
   line-height: 1;
   flex-shrink: 0;
 }
