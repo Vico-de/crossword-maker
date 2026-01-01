@@ -67,6 +67,23 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     const [gridFontCustom, setGridFontCustom] = useState(appearance.gridFont);
     const [definitionFontCustom, setDefinitionFontCustom] = useState(appearance.definitionFont);
     const [showSetDropdown, setShowSetDropdown] = useState(false);
+    type ColorKey =
+        | 'blackCellColor'
+        | 'cellBackgroundColor'
+        | 'arrowColor'
+        | 'letterColor'
+        | 'definitionTextColor'
+        | 'borderColor'
+        | 'separatorColor';
+    const [colorDrafts, setColorDrafts] = useState<Record<ColorKey, string>>({
+        blackCellColor: appearance.blackCellColor,
+        cellBackgroundColor: appearance.cellBackgroundColor,
+        arrowColor: appearance.arrowColor,
+        letterColor: appearance.letterColor,
+        definitionTextColor: appearance.definitionTextColor,
+        borderColor: appearance.borderColor,
+        separatorColor: appearance.separatorColor
+    });
     const gridFontFileInput = useRef<HTMLInputElement | null>(null);
     const definitionFontFileInput = useRef<HTMLInputElement | null>(null);
     const setFileInput = useRef<HTMLInputElement | null>(null);
@@ -81,6 +98,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             height: currentGrid?.size.height || 15
         });
     }, [currentGrid]);
+
+    useEffect(() => {
+        setColorDrafts((prev) => ({
+            ...prev,
+            blackCellColor: appearance.blackCellColor,
+            cellBackgroundColor: appearance.cellBackgroundColor,
+            arrowColor: appearance.arrowColor,
+            letterColor: appearance.letterColor,
+            definitionTextColor: appearance.definitionTextColor,
+            borderColor: appearance.borderColor,
+            separatorColor: appearance.separatorColor
+        }));
+        setGridFontCustom(appearance.gridFont);
+        setDefinitionFontCustom(appearance.definitionFont);
+    }, [appearance]);
 
     const handleSave = () => {
         if (!gridName.trim() || !currentGrid) return;
@@ -165,7 +197,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         reader.readAsText(file);
     };
 
-    const colorFields: { key: keyof AppearanceSettings; label: string }[] = [
+    const colorFields: { key: ColorKey; label: string }[] = [
         { key: 'blackCellColor', label: 'Couleur des cases noires' },
         { key: 'cellBackgroundColor', label: 'Couleur des cases blanches' },
         { key: 'arrowColor', label: 'Couleur des flèches' },
@@ -187,8 +219,42 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         { label: 'Courier New', value: "'Courier New', monospace" }
     ];
 
-    const handleAppearanceFieldChange = (key: keyof AppearanceSettings, value: string) => {
-        onAppearanceChange({ [key]: value });
+    const normalizeHex = (value: string): string | null => {
+        const trimmed = value.trim();
+        if (/^#([0-9a-fA-F]{3})$/.test(trimmed)) {
+            const [, rgb] = trimmed.match(/^#([0-9a-fA-F]{3})$/) || [];
+            if (!rgb) return null;
+            return `#${rgb[0]}${rgb[0]}${rgb[1]}${rgb[1]}${rgb[2]}${rgb[2]}`.toLowerCase();
+        }
+        if (/^#([0-9a-fA-F]{6})$/.test(trimmed)) return trimmed.toLowerCase();
+        return null;
+    };
+
+    const isValidColor = (value: string) => {
+        return (
+            normalizeHex(value) !== null ||
+            /^rgb(a)?\(/i.test(value.trim()) ||
+            /^hsl(a)?\(/i.test(value.trim())
+        );
+    };
+
+    const handleAppearanceFieldChange = (key: keyof AppearanceSettings, value: string, force = false) => {
+        if (key === 'gridFont' || key === 'definitionFont') {
+            onAppearanceChange({ [key]: value });
+            return;
+        }
+
+        const colorKey = key as ColorKey;
+        setColorDrafts((prev) => ({ ...prev, [colorKey]: value }));
+
+        if (force || isValidColor(value)) {
+            const normalized = normalizeHex(value) ?? value;
+            onAppearanceChange({ [colorKey]: normalized });
+        }
+    };
+
+    const resolveColorValue = (key: ColorKey) => {
+        return normalizeHex(colorDrafts[key]) || normalizeHex(appearance[key]) || '#000000';
     };
 
     const selectedFontValue = (current: string) => {
@@ -412,15 +478,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 <div className="color-inputs">
                                     <input
                                         type="color"
-                                        value={appearance[key]}
-                                        onChange={(e) => handleAppearanceFieldChange(key, e.target.value)}
+                                        value={resolveColorValue(key)}
+                                        onChange={(e) => handleAppearanceFieldChange(key, e.target.value, true)}
                                         onFocus={() => onInputFocus(true)}
                                         onBlur={() => onInputFocus(false)}
                                         aria-label={label}
                                     />
                                     <input
                                         type="text"
-                                        value={appearance[key]}
+                                        value={colorDrafts[key]}
                                         onChange={(e) => handleAppearanceFieldChange(key, e.target.value)}
                                         onFocus={() => onInputFocus(true)}
                                         onBlur={() => onInputFocus(false)}
