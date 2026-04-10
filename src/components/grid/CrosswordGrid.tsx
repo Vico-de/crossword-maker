@@ -11,7 +11,6 @@ interface DefinitionMarker {
     word: string;
     definition?: string;
     segmentColor?: string;
-    segmentTextColor?: string;
 }
 
 interface ArrowMarker {
@@ -46,7 +45,7 @@ const computeFitFontSize = (text: string, slotCount: number, baseFontSize: numbe
     const maxHeightSize = availableHeight / Math.max(1, words.length) / 1.35;
     const maxWidthSize = longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18;
     const slotPenalty = slotCount > 1 ? 0.86 : 1;
-    const upperBound = Math.min(baseFontSize, maxHeightSize, maxWidthSize) * slotPenalty;
+    const upperBound = Math.min(14, maxHeightSize, maxWidthSize) * slotPenalty;
 
     for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
         const charWidth = 0.52 * size;

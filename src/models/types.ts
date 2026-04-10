@@ -41,8 +41,6 @@ export interface WordDefinitionPlacement {
     arrowStyle?: 'auto' | 'curved';
     curvedVariant?: 'curved-right' | 'curved-left';
     attachment?: 'left' | 'right' | 'top' | 'bottom';
-    segmentColor?: string;
-    segmentTextColor?: string;
 }
 
 export interface WordDefinitionData {
@@ -140,7 +138,6 @@ export interface GridSet {
         borderColor: string;
         separatorColor: string;
         separatorWidth?: number;
-        definitionBaseFontSize?: number;
         gridFont: string;
         definitionFont: string;
     };
