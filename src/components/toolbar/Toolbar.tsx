@@ -12,7 +12,6 @@ export interface AppearanceSettings {
     borderColor: string;
     separatorColor: string;
     separatorWidth: number;
-    definitionBaseFontSize: number;
     gridFont: string;
     definitionFont: string;
     backgroundImage?: string;
@@ -591,24 +590,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 onChange={(e) =>
                                     onAppearanceChange({
                                         separatorWidth: Math.max(0.25, Math.min(3, Number(e.target.value) || 0.25))
-                                    })
-                                }
-                                onFocus={() => onInputFocus(true)}
-                                onBlur={() => onInputFocus(false)}
-                                className="color-text-input"
-                            />
-                        </div>
-                        <div className="font-field">
-                            <label>Taille de police définitions (base)</label>
-                            <input
-                                type="number"
-                                min={8}
-                                max={16}
-                                step={1}
-                                value={appearance.definitionBaseFontSize}
-                                onChange={(e) =>
-                                    onAppearanceChange({
-                                        definitionBaseFontSize: Math.max(8, Math.min(16, Number(e.target.value) || 10))
                                     })
                                 }
                                 onFocus={() => onInputFocus(true)}
