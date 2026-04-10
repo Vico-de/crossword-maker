@@ -158,7 +158,10 @@ type PackedDefinition = [
             WordDefinitionPlacement['direction'],
             [number, number],
             WordDefinitionPlacement['anchorRole'],
-            WordDirection
+            WordDirection,
+            WordDefinitionPlacement['arrowStyle']?,
+            WordDefinitionPlacement['curvedVariant']?,
+            WordDefinitionPlacement['attachment']?
         ]
         | undefined
 ];
@@ -182,7 +185,10 @@ const packDefinitions = (definitions: Record<string, WordDefinitionData>): Packe
                   data.placement.direction,
                   [data.placement.anchor.x, data.placement.anchor.y],
                   data.placement.anchorRole,
-                  data.placement.wordDirection
+                  data.placement.wordDirection,
+                  data.placement.arrowStyle,
+                  data.placement.curvedVariant,
+                  data.placement.attachment
               ]
             : undefined
     ]);
@@ -202,7 +208,10 @@ const unpackDefinitions = (packed: PackedDefinition[]): Record<string, WordDefin
                           direction: placement[2],
                           anchor: { x: placement[3][0], y: placement[3][1] },
                           anchorRole: placement[4],
-                          wordDirection: placement[5]
+                          wordDirection: placement[5],
+                          arrowStyle: placement[6] || 'auto',
+                          curvedVariant: placement[7],
+                          attachment: placement[8]
                       }
                     : undefined
         };
@@ -263,7 +272,7 @@ const buildPlacementsForGrid = (
 
     Object.entries(definitions).forEach(([word, data]) => {
         if (!data.placement) return;
-        const { x, y, direction, anchorRole, wordDirection, anchor } = data.placement;
+        const { x, y, direction, anchorRole, wordDirection, anchor, arrowStyle, curvedVariant, attachment } = data.placement;
         const cell = grid.cells[y]?.[x];
         if (!cell || !cell.isBlack) return;
 
@@ -287,19 +296,22 @@ const buildPlacementsForGrid = (
             const arrowKey = `${target.x}-${target.y}`;
             if (!arrowPlacements[arrowKey]) arrowPlacements[arrowKey] = [];
 
-            let variant: ArrowPlacement['variant'] = 'straight';
-            if (wordDirection === 'horizontal' && (direction === 'down' || direction === 'up')) {
-                variant = anchorRole === 'start' ? 'curved-right' : 'curved-left';
-            }
-
-            const attachment: ArrowPlacement['attachment'] =
+            const autoVariant: ArrowPlacement['variant'] =
+                wordDirection === 'horizontal' && (direction === 'down' || direction === 'up')
+                    ? anchorRole === 'start'
+                        ? 'curved-right'
+                        : 'curved-left'
+                    : 'straight';
+            const autoAttachment: ArrowPlacement['attachment'] =
                 x < target.x ? 'left' : x > target.x ? 'right' : y < target.y ? 'top' : 'bottom';
+            const variant: ArrowPlacement['variant'] = arrowStyle === 'curved' ? (curvedVariant || 'curved-right') : autoVariant;
+            const resolvedAttachment: ArrowPlacement['attachment'] = arrowStyle === 'curved' ? (attachment || autoAttachment) : autoAttachment;
 
             arrowPlacements[arrowKey].push({
                 direction,
                 variant,
                 from: anchor,
-                attachment
+                attachment: resolvedAttachment
             });
         }
     });
@@ -1193,7 +1205,15 @@ export const CrosswordEditor: React.FC = () => {
             ...prev,
             [word]: {
                 definition: prev[word]?.definition || '',
-                placement: { x, y, direction, anchor, anchorRole: isStart ? 'start' : 'end', wordDirection: candidate.direction }
+                placement: {
+                    x,
+                    y,
+                    direction,
+                    anchor,
+                    anchorRole: isStart ? 'start' : 'end',
+                    wordDirection: candidate.direction,
+                    arrowStyle: 'auto'
+                }
             }
         }));
         setSelectedWord(word);
@@ -1238,6 +1258,56 @@ export const CrosswordEditor: React.FC = () => {
                 [selectedWord]: {
                     ...current,
                     placement: { ...current.placement, direction }
+                }
+            };
+        });
+    };
+
+    const handleArrowStyleUpdate = (arrowStyle: 'auto' | 'curved') => {
+        if (!selectedWord) return;
+        setWordDefinitions((prev) => {
+            const current = prev[selectedWord];
+            if (!current?.placement) return prev;
+            return {
+                ...prev,
+                [selectedWord]: {
+                    ...current,
+                    placement: {
+                        ...current.placement,
+                        arrowStyle,
+                        curvedVariant: arrowStyle === 'curved' ? current.placement.curvedVariant || 'curved-right' : undefined,
+                        attachment: arrowStyle === 'curved' ? current.placement.attachment || 'top' : undefined
+                    }
+                }
+            };
+        });
+    };
+
+    const handleCurvedVariantUpdate = (curvedVariant: 'curved-right' | 'curved-left') => {
+        if (!selectedWord) return;
+        setWordDefinitions((prev) => {
+            const current = prev[selectedWord];
+            if (!current?.placement) return prev;
+            return {
+                ...prev,
+                [selectedWord]: {
+                    ...current,
+                    placement: { ...current.placement, curvedVariant, arrowStyle: 'curved' }
+                }
+            };
+        });
+    };
+
+    const handleAttachmentUpdate = (attachment: 'top' | 'bottom' | 'left' | 'right') => {
+        if (!selectedWord) return;
+        setWordDefinitions((prev) => {
+            const current = prev[selectedWord];
+            if (!current?.placement) return prev;
+            return {
+                ...prev,
+                [selectedWord]: {
+                    ...current,
+                    placement: { ...current.placement, attachment, arrowStyle: 'curved' }
                 }
             };
         });
@@ -1500,6 +1570,36 @@ export const CrosswordEditor: React.FC = () => {
                                         <option value="left">← Vers la gauche</option>
                                         <option value="right">→ Vers la droite</option>
                                     </select>
+                                    <label className="input-label">Mode de tracé</label>
+                                    <select
+                                        value={wordDefinitions[selectedWord]!.placement!.arrowStyle || 'auto'}
+                                        onChange={(e) => handleArrowStyleUpdate(e.target.value as 'auto' | 'curved')}
+                                    >
+                                        <option value="auto">Par défaut (automatique)</option>
+                                        <option value="curved">Coudée personnalisée</option>
+                                    </select>
+                                    {(wordDefinitions[selectedWord]!.placement!.arrowStyle || 'auto') === 'curved' && (
+                                        <>
+                                            <label className="input-label">Direction coudée</label>
+                                            <select
+                                                value={wordDefinitions[selectedWord]!.placement!.curvedVariant || 'curved-right'}
+                                                onChange={(e) => handleCurvedVariantUpdate(e.target.value as 'curved-right' | 'curved-left')}
+                                            >
+                                                <option value="curved-right">↳ Coudée droite</option>
+                                                <option value="curved-left">↲ Coudée gauche</option>
+                                            </select>
+                                            <label className="input-label">Position (vs case noire)</label>
+                                            <select
+                                                value={wordDefinitions[selectedWord]!.placement!.attachment || 'top'}
+                                                onChange={(e) => handleAttachmentUpdate(e.target.value as 'top' | 'bottom' | 'left' | 'right')}
+                                            >
+                                                <option value="top">Haut</option>
+                                                <option value="bottom">Bas</option>
+                                                <option value="left">Gauche</option>
+                                                <option value="right">Droite</option>
+                                            </select>
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </div>
