@@ -341,6 +341,16 @@ const hexToRgb = (hex: string): [number, number, number] => {
     return [((intVal >> 16) & 255) / 255, ((intVal >> 8) & 255) / 255, (intVal & 255) / 255];
 };
 
+const toColorInputValue = (value: string | undefined, fallback: string) => {
+    const candidate = (value || '').trim();
+    if (/^#([0-9a-fA-F]{6})$/.test(candidate)) return candidate;
+    if (/^#([0-9a-fA-F]{3})$/.test(candidate)) {
+        const short = candidate.slice(1);
+        return `#${short[0]}${short[0]}${short[1]}${short[1]}${short[2]}${short[2]}`.toLowerCase();
+    }
+    return fallback;
+};
+
 type PdfPage = { width: number; height: number; content: string };
 
 const renderGridPdfPage = (
