@@ -5,9 +5,6 @@ const SAVED_KEY = 'globalSavedPalette';
 const EVENT_NAME = 'global-color-palette-updated';
 
 const readColors = (key: string): string[] => {
-    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-        return [];
-    }
     try {
         const raw = localStorage.getItem(key);
         if (!raw) return [];
@@ -28,7 +25,6 @@ export const useGlobalColorPalette = () => {
     }, []);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
         const onStorage = () => syncFromStorage();
         const onCustom = () => syncFromStorage();
         window.addEventListener('storage', onStorage);
@@ -40,14 +36,9 @@ export const useGlobalColorPalette = () => {
     }, [syncFromStorage]);
 
     const persist = useCallback((nextRecent: string[], nextSaved: string[]) => {
-        if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
-        try {
-            localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
-            localStorage.setItem(SAVED_KEY, JSON.stringify(nextSaved));
-            window.dispatchEvent(new Event(EVENT_NAME));
-        } catch {
-            // ignore storage failures to avoid blocking rendering
-        }
+        localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
+        localStorage.setItem(SAVED_KEY, JSON.stringify(nextSaved));
+        window.dispatchEvent(new Event(EVENT_NAME));
     }, []);
 
     const addRecentColor = useCallback(
