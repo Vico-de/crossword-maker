@@ -173,6 +173,8 @@ type ArrowPlacement = {
     variant?: 'straight' | 'curved-right' | 'curved-left';
     from: { x: number; y: number };
     attachment?: 'left' | 'right' | 'top' | 'bottom';
+    slotIndex?: number;
+    slotCount?: number;
 };
 
 // Compacte les définitions et leurs ancrages pour les sauvegardes de set.
@@ -272,6 +274,7 @@ const buildPlacementsForGrid = (
 } => {
     const definitionPlacements: Record<string, { word: string; definition?: string; segmentColor?: string; segmentTextColor?: string; segmentFontSize?: number }[]> = {};
     const arrowPlacements: Record<string, ArrowPlacement[]> = {};
+    const pendingArrowPlacements: Record<string, (ArrowPlacement & { word: string; blackCellKey: string })[]> = {};
 
     if (!grid) return { definitionPlacements, arrowPlacements };
 
@@ -305,7 +308,7 @@ const buildPlacementsForGrid = (
 
         if (withinBounds && playable) {
             const arrowKey = `${target.x}-${target.y}`;
-            if (!arrowPlacements[arrowKey]) arrowPlacements[arrowKey] = [];
+            if (!pendingArrowPlacements[arrowKey]) pendingArrowPlacements[arrowKey] = [];
 
             const autoVariant: ArrowPlacement['variant'] =
                 wordDirection === 'horizontal' && (direction === 'down' || direction === 'up')
@@ -318,7 +321,9 @@ const buildPlacementsForGrid = (
             const variant: ArrowPlacement['variant'] = arrowStyle === 'curved' ? (curvedVariant || 'curved-right') : autoVariant;
             const resolvedAttachment: ArrowPlacement['attachment'] = arrowStyle === 'curved' ? (attachment || autoAttachment) : autoAttachment;
 
-            arrowPlacements[arrowKey].push({
+            pendingArrowPlacements[arrowKey].push({
+                word,
+                blackCellKey: key,
                 direction,
                 variant,
                 from: anchor,
@@ -332,6 +337,22 @@ const buildPlacementsForGrid = (
             const orderA = definitions[a.word]?.placement?.order ?? 0;
             const orderB = definitions[b.word]?.placement?.order ?? 0;
             return orderA - orderB;
+        });
+    });
+
+    Object.entries(pendingArrowPlacements).forEach(([arrowKey, arrows]) => {
+        arrowPlacements[arrowKey] = arrows.map((arrow) => {
+            const slots = definitionPlacements[arrow.blackCellKey] || [];
+            const slotIndex = slots.findIndex((slot) => slot.word === arrow.word);
+
+            return {
+                direction: arrow.direction,
+                variant: arrow.variant,
+                from: arrow.from,
+                attachment: arrow.attachment,
+                slotIndex: slotIndex >= 0 ? slotIndex : 0,
+                slotCount: Math.max(1, slots.length)
+            };
         });
     });
 
@@ -528,8 +549,13 @@ const renderGridPdfPage = (
         lines.push(`/F1 ${fontSize.toFixed(2)} Tf`);
 
         arrows.forEach((arrow) => {
+            const slotCount = Math.max(1, arrow.slotCount || 1);
+            const slotIndex = Math.max(0, Math.min(slotCount - 1, arrow.slotIndex || 0));
+            const slotShift = ((slotIndex + 0.5) / slotCount - 0.5) * cellSize;
             const dx = arrow.attachment === 'left' ? -offset : arrow.attachment === 'right' ? offset : 0;
             const dy = arrow.attachment === 'top' ? -offset : arrow.attachment === 'bottom' ? offset : 0;
+            const segmentDx = arrow.attachment === 'top' || arrow.attachment === 'bottom' ? slotShift : 0;
+            const segmentDy = arrow.attachment === 'left' || arrow.attachment === 'right' ? slotShift : 0;
             const char =
                 arrow.variant === 'curved-left'
                     ? arrow.direction === 'down'
@@ -547,7 +573,7 @@ const renderGridPdfPage = (
                                     ? '↑'
                                     : '↓';
             lines.push('BT');
-            lines.push(`${(centerX + dx).toFixed(2)} ${(centerY + dy).toFixed(2)} Td`);
+            lines.push(`${(centerX + dx + segmentDx).toFixed(2)} ${(centerY + dy + segmentDy).toFixed(2)} Td`);
             lines.push(`(${escapePdfText(char)}) Tj`);
             lines.push('ET');
         });
