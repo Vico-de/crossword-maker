@@ -12,6 +12,7 @@ export interface AppearanceSettings {
     separatorColor: string;
     gridFont: string;
     definitionFont: string;
+    backgroundImage?: string;
 }
 
 interface ToolbarProps {
@@ -34,6 +35,8 @@ interface ToolbarProps {
     onExportSetPdf: () => void;
     onSelectSet: (id: string) => void;
     currentSetId: string | null;
+    selectedDirection?: 'horizontal' | 'vertical';
+    onDirectionToggle?: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -55,7 +58,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     onExportGridPdf,
     onExportSetPdf,
     onSelectSet,
-    currentSetId
+    currentSetId,
+    selectedDirection = 'horizontal',
+    onDirectionToggle
 }) => {
     const [activePanel, setActivePanel] = useState<'info' | 'appearance' | null>(null);
     const [gridName, setGridName] = useState(currentGrid?.name || '');
@@ -87,6 +92,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     const gridFontFileInput = useRef<HTMLInputElement | null>(null);
     const definitionFontFileInput = useRef<HTMLInputElement | null>(null);
     const setFileInput = useRef<HTMLInputElement | null>(null);
+    const backgroundImageInput = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         setGridName(currentGrid?.name || '');
@@ -293,24 +299,57 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         input?.click();
     };
 
+    const loadBackgroundImage = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUrl = e.target?.result as string;
+            if (dataUrl) {
+                onAppearanceChange({ backgroundImage: dataUrl });
+            }
+        };
+        reader.onerror = () => {
+            console.error('Erreur lors du chargement de l\'image');
+            window.alert('Impossible de charger cette image. Merci de réessayer.');
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const removeBackgroundImage = () => {
+        onAppearanceChange({ backgroundImage: undefined });
+    };
+
     return (
         <div className="toolbar-container">
             <div className="toolbar-buttons">
-                {['info', 'appearance'].map((panel) => (
+                <div className="toolbar-left">
+                    {['info', 'appearance'].map((panel) => (
+                        <button
+                            key={panel}
+                            className={`tool-button ${activePanel === panel ? 'active' : ''}`}
+                            onClick={() =>
+                                setActivePanel(
+                                    activePanel === panel ? null : (panel as 'info' | 'appearance')
+                                )
+                            }
+                        >
+                            {panel === 'info'
+                                ? 'Infos'
+                                : 'Apparence'}
+                        </button>
+                    ))}
+                </div>
+                {onDirectionToggle && (
                     <button
-                        key={panel}
-                        className={`tool-button ${activePanel === panel ? 'active' : ''}`}
-                        onClick={() =>
-                            setActivePanel(
-                                activePanel === panel ? null : (panel as 'info' | 'appearance')
-                            )
-                        }
+                        className="direction-toggle-button"
+                        onClick={onDirectionToggle}
+                        title="Changer la direction (Tab)"
                     >
-                        {panel === 'info'
-                            ? 'Infos'
-                            : 'Apparence'}
+                        {selectedDirection === 'horizontal' ? '→' : '↓'}
+                        <span className="direction-label">
+                            {selectedDirection === 'horizontal' ? 'Horizontal' : 'Vertical'}
+                        </span>
                     </button>
-                ))}
+                )}
             </div>
             <div className="toolbar-status">
                 <span className="status-item">Set : {currentSetName || 'Nouveau set'}</span>
@@ -599,6 +638,33 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 </div>
                             )}
                         </div>
+
+                        <div className="font-field">
+                            <label>Image de fond</label>
+                            <div className="background-image-controls">
+                                <button
+                                    type="button"
+                                    className="tool-button"
+                                    onClick={() => backgroundImageInput.current?.click()}
+                                >
+                                    {appearance.backgroundImage ? 'Changer l\'image' : 'Ajouter une image'}
+                                </button>
+                                {appearance.backgroundImage && (
+                                    <button
+                                        type="button"
+                                        className="tool-button"
+                                        onClick={removeBackgroundImage}
+                                    >
+                                        Retirer l'image
+                                    </button>
+                                )}
+                            </div>
+                            {appearance.backgroundImage && (
+                                <div className="background-preview">
+                                    <img src={appearance.backgroundImage} alt="Aperçu du fond" />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -635,6 +701,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     const file = e.target.files?.[0];
                     if (file) {
                         loadFontFile(file, 'definition');
+                        e.target.value = '';
+                    }
+                }}
+            />
+            <input
+                ref={backgroundImageInput}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                        loadBackgroundImage(file);
                         e.target.value = '';
                     }
                 }}

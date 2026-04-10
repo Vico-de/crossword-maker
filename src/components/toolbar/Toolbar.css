@@ -6,14 +6,47 @@
     background: #f5f5f5;
     border-bottom: 1px solid #ddd;
     font-family: var(--ui-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif);
+    flex-shrink: 0;
 }
 
 .toolbar-buttons {
     display: flex;
+    justify-content: space-between;
+    align-items: center;
     gap: 8px;
     padding: 8px;
     background: #fff;
     border-bottom: 1px solid #ddd;
+}
+
+.toolbar-left {
+    display: flex;
+    gap: 8px;
+}
+
+.direction-toggle-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 2px solid #1a75ff;
+    border-radius: 0;
+    background: #e6f3ff;
+    color: #1a75ff;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+.direction-toggle-button:hover {
+    background: #cce5ff;
+    border-color: #0052cc;
+}
+
+.direction-label {
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .toolbar-status {
@@ -34,7 +67,7 @@
 .btn {
     padding: 8px 16px;
     border: none;
-    border-radius: 4px;
+    border-radius: 0;
     cursor: pointer;
     font-weight: 500;
 }
@@ -101,7 +134,7 @@
 .input-base {
     padding: 8px;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: 0;
 }
 
 .grid-name-input {
@@ -161,6 +194,26 @@
     padding: 8px;
 }
 
+.background-image-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.background-preview {
+    margin-top: 8px;
+    max-width: 200px;
+    border: 1px solid #ddd;
+    border-radius: 0;
+    overflow: hidden;
+}
+
+.background-preview img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
 /* Dropdown pour le chargement */
 .load-dropdown {
     position: relative;
@@ -175,8 +228,9 @@
     min-width: 250px;
     max-height: 400px;
     overflow-y: auto;
-    border-radius: 4px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    border-radius: 0;
+    box-shadow: none;
+    border: 1px solid #ddd;
     z-index: 1000;
 }
 

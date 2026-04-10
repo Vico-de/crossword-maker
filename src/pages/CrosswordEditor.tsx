@@ -145,7 +145,8 @@ const areAppearancesEqual = (a: AppearanceSettings, b: AppearanceSettings) =>
     a.borderColor === b.borderColor &&
     a.separatorColor === b.separatorColor &&
     a.gridFont === b.gridFont &&
-    a.definitionFont === b.definitionFont;
+    a.definitionFont === b.definitionFont &&
+    a.backgroundImage === b.backgroundImage;
 
 type PackedDefinition = [
     string,
@@ -677,6 +678,7 @@ export const CrosswordEditor: React.FC = () => {
     const [wordDefinitions, setWordDefinitions] = useState<Record<string, WordDefinitionData>>({});
     const [placementTargetWord, setPlacementTargetWord] = useState<string | null>(null);
     const [appearance, setAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
+    const [zoom, setZoom] = useState(1);
     const initialSets: GridSet[] = useMemo(() => {
         const storedSets = localStorage.getItem('gridSets');
         if (storedSets) {
@@ -1136,10 +1138,6 @@ export const CrosswordEditor: React.FC = () => {
         dispatch({ type: 'RESIZE_GRID', payload: { width, height } });
     };
 
-    const handleAppearanceChange = (changes: Partial<AppearanceSettings>) => {
-        setAppearance((prev) => ({ ...prev, ...changes }));
-    };
-
     const toggleDirection = () => {
         dispatch({
             type: 'SET_DIRECTION',
@@ -1282,6 +1280,34 @@ export const CrosswordEditor: React.FC = () => {
         });
     };
 
+    const handleZoomIn = () => {
+        setZoom((prev) => Math.min(prev + 0.1, 2));
+    };
+
+    const handleZoomOut = () => {
+        setZoom((prev) => Math.max(prev - 0.1, 0.5));
+    };
+
+    const handleZoomReset = () => {
+        setZoom(1);
+    };
+
+    useEffect(() => {
+        const gridArea = gridAreaRef.current;
+        if (!gridArea) return;
+
+        const handleWheel = (e: WheelEvent) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                setZoom((prev) => Math.max(0.5, Math.min(2, prev + delta)));
+            }
+        };
+
+        gridArea.addEventListener('wheel', handleWheel, { passive: false });
+        return () => gridArea.removeEventListener('wheel', handleWheel);
+    }, []);
+
     const { 
         wordsList,
         highlightedCells,
@@ -1416,23 +1442,41 @@ export const CrosswordEditor: React.FC = () => {
                 onExportSetPdf={handleExportSetPdf}
                 onSelectSet={handleSelectSet}
                 currentSetId={currentSetId}
+                selectedDirection={state.selectedDirection}
+                onDirectionToggle={toggleDirection}
             />
+            <div className="zoom-controls">
+                <button className="zoom-button" onClick={handleZoomOut} title="Dézoomer (Ctrl + molette bas)">−</button>
+                <button className="zoom-button" onClick={handleZoomReset} title="Réinitialiser le zoom">{Math.round(zoom * 100)}%</button>
+                <button className="zoom-button" onClick={handleZoomIn} title="Zoomer (Ctrl + molette haut)">+</button>
+            </div>
             <div className="editor-container">
                 <div className="editor-main">
-                    <div className="grid-area" ref={gridAreaRef}>
-                        {state.currentGrid && (
-                            <CrosswordGrid
-                                cells={state.currentGrid.cells}
-                                onCellClick={handleCellClick}
-                                onCellUpdate={handleCellUpdate}
-                                selectedCell={state.selectedCell}
-                                selectedDirection={state.selectedDirection}
-                                onDirectionChange={toggleDirection}
-                                highlightedCells={highlightedCells}
-                                definitionPlacements={definitionPlacements}
-                                arrowPlacements={arrowPlacements}
-                            />
-                        )}
+                    <div
+                        className="grid-area"
+                        ref={gridAreaRef}
+                        style={{
+                            backgroundImage: appearance.backgroundImage ? `url(${appearance.backgroundImage})` : 'none',
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            backgroundRepeat: 'no-repeat'
+                        }}
+                    >
+                        <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
+                            {state.currentGrid && (
+                                <CrosswordGrid
+                                    cells={state.currentGrid.cells}
+                                    onCellClick={handleCellClick}
+                                    onCellUpdate={handleCellUpdate}
+                                    selectedCell={state.selectedCell}
+                                    selectedDirection={state.selectedDirection}
+                                    onDirectionChange={toggleDirection}
+                                    highlightedCells={highlightedCells}
+                                    definitionPlacements={definitionPlacements}
+                                    arrowPlacements={arrowPlacements}
+                                />
+                            )}
+                        </div>
                     </div>
                 </div>
                 <div className="words-sidebar">

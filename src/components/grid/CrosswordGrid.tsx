@@ -178,13 +178,6 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
 
     return (
         <div className="crossword-grid-container">
-            <button
-                className="direction-indicator"
-                onClick={onDirectionChange}
-                title="Changer de direction (Tab)"
-            >
-                {selectedDirection === 'horizontal' ? '→' : '↓'}
-            </button>
             <div className="crossword-grid" style={boardStyle}>
                 {cells.flatMap((row, y) =>
                     row.map((cell, x) => (
