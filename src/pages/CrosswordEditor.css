@@ -258,20 +258,6 @@
   gap: 8px;
 }
 
-.black-cell-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.black-cell-definition-card {
-  border: 1px solid #ddd;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 @media (max-width: 1024px) {
   .editor-main {
     flex-direction: column;
