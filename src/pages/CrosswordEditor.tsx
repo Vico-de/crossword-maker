@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CrosswordGrid } from '../components/grid/CrosswordGrid';
 import { Toolbar, type AppearanceSettings } from '../components/toolbar/Toolbar';
 import { useCrossword } from '../context/CrosswordContext';
+import { useGlobalColorPalette } from '../hooks/useGlobalColorPalette';
 import type {
     Cell,
     Grid,
@@ -340,6 +341,16 @@ const hexToRgb = (hex: string): [number, number, number] => {
     return [((intVal >> 16) & 255) / 255, ((intVal >> 8) & 255) / 255, (intVal & 255) / 255];
 };
 
+const toColorInputValue = (value: string | undefined, fallback: string) => {
+    const candidate = (value || '').trim();
+    if (/^#([0-9a-fA-F]{6})$/.test(candidate)) return candidate;
+    if (/^#([0-9a-fA-F]{3})$/.test(candidate)) {
+        const short = candidate.slice(1);
+        return `#${short[0]}${short[0]}${short[1]}${short[1]}${short[2]}${short[2]}`.toLowerCase();
+    }
+    return fallback;
+};
+
 type PdfPage = { width: number; height: number; content: string };
 
 const renderGridPdfPage = (
@@ -458,7 +469,7 @@ const renderGridPdfPage = (
                         });
                         if (current) textLines.push(current);
 
-                        lines.push(rgbFill(appearance.definitionTextColor));
+                        lines.push(rgbFill(def.segmentTextColor || appearance.definitionTextColor));
                         lines.push(`/F1 ${fontSize.toFixed(2)} Tf`);
                         textLines.forEach((line, lineIndex) => {
                             const centerY = startY + areaHeight / 2 + (lineIndex - (textLines.length - 1) / 2) * (fontSize * 1.1);
@@ -676,6 +687,7 @@ export const CrosswordEditor: React.FC = () => {
     const [wordDefinitions, setWordDefinitions] = useState<Record<string, WordDefinitionData>>({});
     const [placementTargetWord, setPlacementTargetWord] = useState<string | null>(null);
     const [appearance, setAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
+    const { recentColors, savedPalette, addRecentColor, saveColor } = useGlobalColorPalette();
     const [zoom, setZoom] = useState(1);
     const initialSets: GridSet[] = useMemo(() => {
         const storedSets = localStorage.getItem('gridSets');
@@ -1548,58 +1560,172 @@ export const CrosswordEditor: React.FC = () => {
                                     highlightedCells={highlightedCells}
                                     definitionPlacements={definitionPlacements}
                                     arrowPlacements={arrowPlacements}
+                                    definitionBaseFontSize={appearance.definitionBaseFontSize}
                                 />
                             )}
                         </div>
                     </div>
                 </div>
                 <div className="words-sidebar">
-                    <h3>Mots trouvés ({wordsList.length})</h3>
-                    <div className="words-list">
-                        {wordsList.map((word, index) => {
-                            const wordData = wordDefinitions[word];
-                            return (
-                                <button
-                                    key={`${word}-${index}`}
-                                    className={`word-item ${selectedWord === word ? 'active' : ''}`}
-                                    onClick={() => handleWordSelect(word)}
-                                >
-                                    <span className="word-label">{word}</span>
-                                    <span className="word-flags">
-                                        {wordData?.definition && <span title="Définition ajoutée">📝</span>}
-                                        {wordData?.placement && <span title="Emplacement choisi">📍</span>}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {selectedWord && (
-                        <div className="word-details">
-                            <div className="details-header">
-                                <h4>{selectedWord}</h4>
-                                {placementTargetWord === selectedWord && <span className="placement-hint">Cliquez sur une case noire adjacente au mot</span>}
-                            </div>
-                            <label className="input-label">Définition</label>
-                            <textarea
-                                value={wordDefinitions[selectedWord]?.definition || ''}
-                                onChange={(e) => handleDefinitionChange(e.target.value)}
-                                onFocus={() => dispatch({ type: 'SELECT_CELL', payload: null })}
-                                placeholder="Écrire ou coller la définition du mot"
+                    {showBlackCellSidebar ? (
+                        <div className="black-cell-panel">
+                            <h3>Case noire ({selectedBlackCell.x + 1}, {selectedBlackCell.y + 1})</h3>
+                            <label className="input-label">Taille de police par défaut</label>
+                            <input
+                                type="number"
+                                min={8}
+                                max={16}
+                                step={1}
+                                value={appearance.definitionBaseFontSize}
+                                onChange={(e) =>
+                                    applyAppearanceChanges({
+                                        definitionBaseFontSize: Math.max(8, Math.min(16, Number(e.target.value) || 10))
+                                    })
+                                }
+                                className="color-text-input"
                             />
-                            <div className="definition-actions">
-                                <button
-                                    type="button"
-                                    className={placementTargetWord === selectedWord ? 'primary' : ''}
-                                    onClick={handlePlacementRequest}
-                                >
-                                    Sélectionner l'emplacement de la définition
-                                </button>
+                            <div className="definition-order-panel">
+                                <label className="input-label">Ordre des définitions</label>
+                                {selectedBlackCellDefinitions.map((entry, index) => (
+                                    <div key={`black-panel-${entry.word}`} className="black-cell-definition-card">
+                                        <div className="definition-order-row">
+                                            <strong>{index + 1}. {entry.word}</strong>
+                                            <div>
+                                                <button
+                                                    type="button"
+                                                    className="tool-button"
+                                                    onClick={() => moveDefinitionInBlackCell(entry.word, 'up')}
+                                                    disabled={index === 0}
+                                                >
+                                                    ↑
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="tool-button"
+                                                    onClick={() => moveDefinitionInBlackCell(entry.word, 'down')}
+                                                    disabled={index === selectedBlackCellDefinitions.length - 1}
+                                                >
+                                                    ↓
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <textarea
+                                            value={entry.data.definition || ''}
+                                            onChange={(e) =>
+                                                setWordDefinitions((prev) => {
+                                                    const current = prev[entry.word];
+                                                    if (!current) return prev;
+                                                    return {
+                                                        ...prev,
+                                                        [entry.word]: { ...current, definition: e.target.value }
+                                                    };
+                                                })
+                                            }
+                                            placeholder="Définition"
+                                        />
+                                        <div className="segment-color-editor">
+                                            <label className="input-label">Fond</label>
+                                            <input
+                                                type="color"
+                                                value={toColorInputValue(entry.data.placement?.segmentColor, appearance.blackCellColor)}
+                                                disabled={!entry.data.placement}
+                                                onChange={(e) => handleSegmentColorUpdate(e.target.value, entry.word)}
+                                            />
+                                            <label className="input-label">Texte</label>
+                                            <input
+                                                type="color"
+                                                value={toColorInputValue(entry.data.placement?.segmentTextColor, appearance.definitionTextColor)}
+                                                disabled={!entry.data.placement}
+                                                onChange={(e) => handleSegmentTextColorUpdate(entry.word, e.target.value)}
+                                            />
+                                            <button
+                                                type="button"
+                                                className="tool-button"
+                                                disabled={!entry.data.placement}
+                                                onClick={() => {
+                                                    const bg = entry.data.placement?.segmentColor || appearance.blackCellColor;
+                                                    const fg = entry.data.placement?.segmentTextColor || appearance.definitionTextColor;
+                                                    saveColor(bg);
+                                                    saveColor(fg);
+                                                }}
+                                            >
+                                                Enregistrer couleurs
+                                            </button>
+                                        </div>
+                                        <div className="color-palette-row">
+                                            {recentColors.slice(0, 10).map((color) => (
+                                                <button
+                                                    key={`${entry.word}-recent-bg-${color}`}
+                                                    type="button"
+                                                    className="color-chip"
+                                                    style={{ backgroundColor: color }}
+                                                    title={`Fond ${color}`}
+                                                    onClick={() => handleSegmentColorUpdate(color, entry.word)}
+                                                />
+                                            ))}
+                                        </div>
+                                        <div className="color-palette-row">
+                                            {savedPalette.map((color) => (
+                                                <button
+                                                    key={`${entry.word}-saved-text-${color}`}
+                                                    type="button"
+                                                    className="color-chip"
+                                                    style={{ backgroundColor: color }}
+                                                    title={`Texte ${color}`}
+                                                    onClick={() => handleSegmentTextColorUpdate(entry.word, color)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                {selectedBlackCellDefinitions.length === 0 && (
+                                    <p>Aucune définition liée à cette case noire.</p>
+                                )}
                             </div>
-                            {wordDefinitions[selectedWord]?.placement && (
-                                <div className="placement-summary">
-                                    <div>
-                                        Case noire : ({wordDefinitions[selectedWord]!.placement!.x + 1}, {wordDefinitions[selectedWord]!.placement!.y + 1})
+                        </div>
+                    ) : (
+                        <>
+                            <h3>Mots trouvés ({wordsList.length})</h3>
+                            <div className="words-list">
+                                {wordsList.map((word, index) => {
+                                    const wordData = wordDefinitions[word];
+                                    return (
+                                        <button
+                                            key={`${word}-${index}`}
+                                            className={`word-item ${selectedWord === word ? 'active' : ''}`}
+                                            onClick={() => handleWordSelect(word)}
+                                        >
+                                            <span className="word-label">{word}</span>
+                                            <span className="word-flags">
+                                                {wordData?.definition && <span title="Définition ajoutée">📝</span>}
+                                                {wordData?.placement && <span title="Emplacement choisi">📍</span>}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {selectedWord && (
+                                <div className="word-details">
+                                    <div className="details-header">
+                                        <h4>{selectedWord}</h4>
+                                        {placementTargetWord === selectedWord && <span className="placement-hint">Cliquez sur une case noire adjacente au mot</span>}
+                                    </div>
+                                    <label className="input-label">Définition</label>
+                                    <textarea
+                                        value={wordDefinitions[selectedWord]?.definition || ''}
+                                        onChange={(e) => handleDefinitionChange(e.target.value)}
+                                        onFocus={() => dispatch({ type: 'SELECT_CELL', payload: null })}
+                                        placeholder="Écrire ou coller la définition du mot"
+                                    />
+                                    <div className="definition-actions">
+                                        <button
+                                            type="button"
+                                            className={placementTargetWord === selectedWord ? 'primary' : ''}
+                                            onClick={handlePlacementRequest}
+                                        >
+                                            Sélectionner l'emplacement de la définition
+                                        </button>
                                     </div>
                                     <label className="input-label">Orientation de la flèche</label>
                                     <select
@@ -1643,7 +1769,7 @@ export const CrosswordEditor: React.FC = () => {
                                     )}
                                 </div>
                             )}
-                        </div>
+                        </>
                     )}
                 </div>
             </div>
