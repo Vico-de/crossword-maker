@@ -20,6 +20,8 @@ interface ArrowMarker {
     variant?: 'straight' | 'curved-right' | 'curved-left';
     from: { x: number; y: number };
     attachment?: 'left' | 'right' | 'top' | 'bottom';
+    slotIndex?: number;
+    slotCount?: number;
 }
 
 interface CellProps {
@@ -147,6 +149,12 @@ const CrosswordCell: React.FC<CellProps> = ({
                                       ? 'curved-left'
                                       : 'curved-right'
                             } ${arrow.attachment ? `attach-${arrow.attachment}` : ''}`}
+                            style={
+                                {
+                                    ['--slot-index' as string]: `${Math.max(0, arrow.slotIndex || 0)}`,
+                                    ['--slot-count' as string]: `${Math.max(1, arrow.slotCount || 1)}`
+                                } as React.CSSProperties
+                            }
                         />
                     ))}
                 </div>
