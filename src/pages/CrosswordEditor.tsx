@@ -173,7 +173,6 @@ type ArrowPlacement = {
     variant?: 'straight' | 'curved-right' | 'curved-left';
     from: { x: number; y: number };
     attachment?: 'left' | 'right' | 'top' | 'bottom';
-    segmentOffsetPercent?: number;
 };
 
 // Compacte les définitions et leurs ancrages pour les sauvegardes de set.
@@ -276,18 +275,9 @@ const buildPlacementsForGrid = (
 
     if (!grid) return { definitionPlacements, arrowPlacements };
 
-    const defsByBlackCell: Record<string, { word: string; data: WordDefinitionData }[]> = {};
     Object.entries(definitions).forEach(([word, data]) => {
         if (!data.placement) return;
-        const key = `${data.placement.x}-${data.placement.y}`;
-        if (!defsByBlackCell[key]) defsByBlackCell[key] = [];
-        defsByBlackCell[key].push({ word, data });
-    });
-
-    Object.entries(defsByBlackCell).forEach(([key, defsAtCell]) => {
-        const [xStr, yStr] = key.split('-');
-        const x = Number(xStr);
-        const y = Number(yStr);
+        const { x, y, direction, anchorRole, wordDirection, anchor, arrowStyle, curvedVariant, attachment } = data.placement;
         const cell = grid.cells[y]?.[x];
         if (!cell || !cell.isBlack) return;
 
@@ -301,32 +291,19 @@ const buildPlacementsForGrid = (
             segmentFontSize: data.placement.segmentFontSize
         });
 
-        sortedDefs.forEach(({ data }, segmentIndex) => {
-            if (!data.placement) return;
-            const {
-                direction,
-                anchorRole,
-                wordDirection,
-                anchor,
-                arrowStyle,
-                curvedVariant,
-                attachment
-            } = data.placement;
+        const target = {
+            x: x + (direction === 'right' ? 1 : direction === 'left' ? -1 : 0),
+            y: y + (direction === 'down' ? 1 : direction === 'up' ? -1 : 0)
+        };
 
-            const target = {
-                x: x + (direction === 'right' ? 1 : direction === 'left' ? -1 : 0),
-                y: y + (direction === 'down' ? 1 : direction === 'up' ? -1 : 0)
-            };
+        const withinBounds =
+            target.x >= 0 &&
+            target.y >= 0 &&
+            target.y < grid.cells.length &&
+            target.x < grid.cells[0].length;
+        const playable = withinBounds && !grid.cells[target.y][target.x].isBlack;
 
-            const withinBounds =
-                target.x >= 0 &&
-                target.y >= 0 &&
-                target.y < grid.cells.length &&
-                target.x < grid.cells[0].length;
-            const playable = withinBounds && !grid.cells[target.y][target.x].isBlack;
-
-            if (!withinBounds || !playable) return;
-
+        if (withinBounds && playable) {
             const arrowKey = `${target.x}-${target.y}`;
             if (!arrowPlacements[arrowKey]) arrowPlacements[arrowKey] = [];
 
@@ -340,17 +317,14 @@ const buildPlacementsForGrid = (
                 x < target.x ? 'left' : x > target.x ? 'right' : y < target.y ? 'top' : 'bottom';
             const variant: ArrowPlacement['variant'] = arrowStyle === 'curved' ? (curvedVariant || 'curved-right') : autoVariant;
             const resolvedAttachment: ArrowPlacement['attachment'] = arrowStyle === 'curved' ? (attachment || autoAttachment) : autoAttachment;
-            const segmentOffsetPercent =
-                segmentCount > 1 ? ((segmentIndex + 0.5) / segmentCount - 0.5) * 100 : 0;
 
             arrowPlacements[arrowKey].push({
                 direction,
                 variant,
                 from: anchor,
-                attachment: resolvedAttachment,
-                segmentOffsetPercent
+                attachment: resolvedAttachment
             });
-        });
+        }
     });
 
     Object.keys(definitionPlacements).forEach((key) => {

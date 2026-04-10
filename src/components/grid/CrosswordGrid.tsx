@@ -20,7 +20,6 @@ interface ArrowMarker {
     variant?: 'straight' | 'curved-right' | 'curved-left';
     from: { x: number; y: number };
     attachment?: 'left' | 'right' | 'top' | 'bottom';
-    segmentOffsetPercent?: number;
 }
 
 interface CellProps {
@@ -148,9 +147,6 @@ const CrosswordCell: React.FC<CellProps> = ({
                                       ? 'curved-left'
                                       : 'curved-right'
                             } ${arrow.attachment ? `attach-${arrow.attachment}` : ''}`}
-                            style={{
-                                ['--segment-offset' as string]: `${arrow.segmentOffsetPercent ?? 0}%`
-                            }}
                         />
                     ))}
                 </div>
