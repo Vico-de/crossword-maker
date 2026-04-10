@@ -291,18 +291,15 @@ const buildPlacementsForGrid = (
         const cell = grid.cells[y]?.[x];
         if (!cell || !cell.isBlack) return;
 
-        const sortedDefs = [...defsAtCell].sort(
-            (a, b) => (a.data.placement?.order ?? 0) - (b.data.placement?.order ?? 0)
-        );
-        const segmentCount = sortedDefs.length;
-
-        definitionPlacements[key] = sortedDefs.map(({ word, data }) => ({
+        const key = `${x}-${y}`;
+        if (!definitionPlacements[key]) definitionPlacements[key] = [];
+        definitionPlacements[key].push({
             word,
             definition: data.definition,
-            segmentColor: data.placement?.segmentColor,
-            segmentTextColor: data.placement?.segmentTextColor,
-            segmentFontSize: data.placement?.segmentFontSize
-        }));
+            segmentColor: data.placement.segmentColor,
+            segmentTextColor: data.placement.segmentTextColor,
+            segmentFontSize: data.placement.segmentFontSize
+        });
 
         sortedDefs.forEach(({ data }, segmentIndex) => {
             if (!data.placement) return;
@@ -353,6 +350,14 @@ const buildPlacementsForGrid = (
                 attachment: resolvedAttachment,
                 segmentOffsetPercent
             });
+        });
+    });
+
+    Object.keys(definitionPlacements).forEach((key) => {
+        definitionPlacements[key].sort((a, b) => {
+            const orderA = definitions[a.word]?.placement?.order ?? 0;
+            const orderB = definitions[b.word]?.placement?.order ?? 0;
+            return orderA - orderB;
         });
     });
 
