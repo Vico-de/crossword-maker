@@ -11,6 +11,8 @@ interface DefinitionMarker {
     word: string;
     definition?: string;
     segmentColor?: string;
+    segmentTextColor?: string;
+    segmentFontSize?: number;
 }
 
 interface ArrowMarker {
@@ -118,10 +120,11 @@ const CrosswordCell: React.FC<CellProps> = ({
                                     <span
                                         className="definition-text"
                                         style={{
-                                            ['--fit-size' as string]: `${computeFitFontSize(
-                                                markerText,
-                                                slotCount
-                                            )}px`
+                                            ['--fit-size' as string]: `${
+                                                definition.segmentFontSize ||
+                                                computeFitFontSize(markerText, slotCount)
+                                            }px`,
+                                            color: definition.segmentTextColor
                                         }}
                                     >
                                         {markerText}
