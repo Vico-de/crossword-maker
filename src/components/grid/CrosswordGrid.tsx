@@ -10,6 +10,8 @@ type DefinitionDirection = 'up' | 'down' | 'left' | 'right';
 interface DefinitionMarker {
     word: string;
     definition?: string;
+    segmentColor?: string;
+    segmentTextColor?: string;
 }
 
 interface ArrowMarker {
@@ -28,21 +30,23 @@ interface CellProps {
     isHighlighted?: boolean;
     definitions?: DefinitionMarker[];
     arrows?: ArrowMarker[];
+    definitionBaseFontSize: number;
     onClick: () => void;
     onChange: (changes: Partial<CellType>) => void;
 }
 
 const BASE_CELL_SIZE = 40;
 
-const computeFitFontSize = (text: string, slotCount: number) => {
+const computeFitFontSize = (text: string, slotCount: number, baseFontSize: number) => {
     const availableWidth = BASE_CELL_SIZE - 6;
     const availableHeight = (BASE_CELL_SIZE - 6) / Math.max(1, slotCount) - 2;
     const words = text.split(/\s+/).filter(Boolean);
     const longestWord = words.reduce((max, w) => Math.max(max, w.length), 0);
 
-    const maxHeightSize = availableHeight / Math.max(1, words.length) / 1.15;
+    const maxHeightSize = availableHeight / Math.max(1, words.length) / 1.35;
     const maxWidthSize = longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18;
-    const upperBound = Math.min(18, maxHeightSize, maxWidthSize);
+    const slotPenalty = slotCount > 1 ? 0.86 : 1;
+    const upperBound = Math.min(baseFontSize, maxHeightSize, maxWidthSize) * slotPenalty;
 
     for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
         const charWidth = 0.52 * size;
@@ -86,6 +90,7 @@ const CrosswordCell: React.FC<CellProps> = ({
     isHighlighted,
     definitions,
     arrows,
+    definitionBaseFontSize,
     onClick,
     onChange,
     x,
@@ -106,14 +111,22 @@ const CrosswordCell: React.FC<CellProps> = ({
                         (() => {
                             const markerText = (definition.definition || definition.word).toUpperCase();
                             return (
-                                <div key={`${definition.word}-${index}`} className="definition-marker">
+                                <div
+                                    key={`${definition.word}-${index}`}
+                                    className="definition-marker"
+                                    style={{
+                                        backgroundColor: definition.segmentColor || 'var(--grid-black-color, #000)'
+                                    }}
+                                >
                                     <span
                                         className="definition-text"
                                         style={{
                                             ['--fit-size' as string]: `${computeFitFontSize(
                                                 markerText,
-                                                slotCount
-                                            )}px`
+                                                slotCount,
+                                                definitionBaseFontSize
+                                            )}px`,
+                                            color: definition.segmentTextColor || 'var(--grid-definition-color, #f5f5f5)'
                                         }}
                                     >
                                         {markerText}
@@ -155,6 +168,7 @@ interface CrosswordGridProps {
     definitionPlacements?: Record<string, DefinitionMarker[]>;
     arrowPlacements?: Record<string, ArrowMarker[]>;
     onBlackCellClick?: (x: number, y: number) => void;
+    definitionBaseFontSize?: number;
 }
 
 export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
@@ -167,7 +181,8 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
     highlightedCells,
     definitionPlacements,
     arrowPlacements,
-    onBlackCellClick
+    onBlackCellClick,
+    definitionBaseFontSize = 10
 }) => {
     const gridWidth = cells[0]?.length || 0;
     const gridHeight = cells.length;
@@ -190,6 +205,7 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
                             isHighlighted={highlightedCells?.has(`${x}-${y}`)}
                             definitions={definitionPlacements?.[`${x}-${y}`]}
                             arrows={arrowPlacements?.[`${x}-${y}`]}
+                            definitionBaseFontSize={definitionBaseFontSize}
                             onClick={() => {
                                 onCellClick(x, y);
                                 if (cell.isBlack && onBlackCellClick) {
