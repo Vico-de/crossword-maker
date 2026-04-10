@@ -170,20 +170,6 @@
     align-items: center;
 }
 
-.color-palette-row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    align-items: center;
-}
-
-.color-chip {
-    width: 18px;
-    height: 18px;
-    border: 1px solid #777;
-    cursor: pointer;
-}
-
 .custom-font-row {
     display: flex;
     gap: 8px;

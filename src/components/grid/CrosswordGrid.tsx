@@ -29,14 +29,13 @@ interface CellProps {
     isHighlighted?: boolean;
     definitions?: DefinitionMarker[];
     arrows?: ArrowMarker[];
-    definitionBaseFontSize: number;
     onClick: () => void;
     onChange: (changes: Partial<CellType>) => void;
 }
 
 const BASE_CELL_SIZE = 40;
 
-const computeFitFontSize = (text: string, slotCount: number, baseFontSize: number) => {
+const computeFitFontSize = (text: string, slotCount: number) => {
     const availableWidth = BASE_CELL_SIZE - 6;
     const availableHeight = (BASE_CELL_SIZE - 6) / Math.max(1, slotCount) - 2;
     const words = text.split(/\s+/).filter(Boolean);
@@ -89,7 +88,6 @@ const CrosswordCell: React.FC<CellProps> = ({
     isHighlighted,
     definitions,
     arrows,
-    definitionBaseFontSize,
     onClick,
     onChange,
     x,
@@ -122,10 +120,8 @@ const CrosswordCell: React.FC<CellProps> = ({
                                         style={{
                                             ['--fit-size' as string]: `${computeFitFontSize(
                                                 markerText,
-                                                slotCount,
-                                                definitionBaseFontSize
-                                            )}px`,
-                                            color: definition.segmentTextColor || 'var(--grid-definition-color, #f5f5f5)'
+                                                slotCount
+                                            )}px`
                                         }}
                                     >
                                         {markerText}
@@ -167,7 +163,6 @@ interface CrosswordGridProps {
     definitionPlacements?: Record<string, DefinitionMarker[]>;
     arrowPlacements?: Record<string, ArrowMarker[]>;
     onBlackCellClick?: (x: number, y: number) => void;
-    definitionBaseFontSize?: number;
 }
 
 export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
@@ -180,8 +175,7 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
     highlightedCells,
     definitionPlacements,
     arrowPlacements,
-    onBlackCellClick,
-    definitionBaseFontSize = 10
+    onBlackCellClick
 }) => {
     const gridWidth = cells[0]?.length || 0;
     const gridHeight = cells.length;
@@ -204,7 +198,6 @@ export const CrosswordGrid: React.FC<CrosswordGridProps> = ({
                             isHighlighted={highlightedCells?.has(`${x}-${y}`)}
                             definitions={definitionPlacements?.[`${x}-${y}`]}
                             arrows={arrowPlacements?.[`${x}-${y}`]}
-                            definitionBaseFontSize={definitionBaseFontSize}
                             onClick={() => {
                                 onCellClick(x, y);
                                 if (cell.isBlack && onBlackCellClick) {
