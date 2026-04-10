@@ -226,6 +226,52 @@
   border: 1px solid #ccc;
 }
 
+.segment-color-editor {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.color-palette-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.color-chip {
+  width: 20px;
+  height: 20px;
+  border: 1px solid #777;
+  cursor: pointer;
+}
+
+.definition-order-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.definition-order-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.black-cell-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.black-cell-definition-card {
+  border: 1px solid #ddd;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 @media (max-width: 1024px) {
   .editor-main {
     flex-direction: column;
