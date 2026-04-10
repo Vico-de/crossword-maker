@@ -41,6 +41,10 @@ export interface WordDefinitionPlacement {
     arrowStyle?: 'auto' | 'curved';
     curvedVariant?: 'curved-right' | 'curved-left';
     attachment?: 'left' | 'right' | 'top' | 'bottom';
+    order?: number;
+    segmentColor?: string;
+    segmentTextColor?: string;
+    segmentFontSize?: number;
 }
 
 export interface WordDefinitionData {
