@@ -11,6 +11,8 @@ interface DefinitionMarker {
     word: string;
     definition?: string;
     segmentColor?: string;
+    segmentTextColor?: string;
+    segmentFontSize?: number;
 }
 
 interface ArrowMarker {
@@ -18,6 +20,7 @@ interface ArrowMarker {
     variant?: 'straight' | 'curved-right' | 'curved-left';
     from: { x: number; y: number };
     attachment?: 'left' | 'right' | 'top' | 'bottom';
+    segmentOffsetPercent?: number;
 }
 
 interface CellProps {
@@ -118,10 +121,11 @@ const CrosswordCell: React.FC<CellProps> = ({
                                     <span
                                         className="definition-text"
                                         style={{
-                                            ['--fit-size' as string]: `${computeFitFontSize(
-                                                markerText,
-                                                slotCount
-                                            )}px`
+                                            ['--fit-size' as string]: `${
+                                                definition.segmentFontSize ||
+                                                computeFitFontSize(markerText, slotCount)
+                                            }px`,
+                                            color: definition.segmentTextColor
                                         }}
                                     >
                                         {markerText}
@@ -144,6 +148,9 @@ const CrosswordCell: React.FC<CellProps> = ({
                                       ? 'curved-left'
                                       : 'curved-right'
                             } ${arrow.attachment ? `attach-${arrow.attachment}` : ''}`}
+                            style={{
+                                ['--segment-offset' as string]: `${arrow.segmentOffsetPercent ?? 0}%`
+                            }}
                         />
                     ))}
                 </div>
