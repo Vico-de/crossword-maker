@@ -163,8 +163,7 @@ type PackedDefinition = [
             WordDirection,
             WordDefinitionPlacement['arrowStyle']?,
             WordDefinitionPlacement['curvedVariant']?,
-            WordDefinitionPlacement['attachment']?,
-            WordDefinitionPlacement['segmentColor']?
+            WordDefinitionPlacement['attachment']?
         ]
         | undefined
 ];
@@ -191,8 +190,7 @@ const packDefinitions = (definitions: Record<string, WordDefinitionData>): Packe
                   data.placement.wordDirection,
                   data.placement.arrowStyle,
                   data.placement.curvedVariant,
-                  data.placement.attachment,
-                  data.placement.segmentColor
+                  data.placement.attachment
               ]
             : undefined
     ]);
@@ -215,8 +213,7 @@ const unpackDefinitions = (packed: PackedDefinition[]): Record<string, WordDefin
                           wordDirection: placement[5],
                           arrowStyle: placement[6] || 'auto',
                           curvedVariant: placement[7],
-                          attachment: placement[8],
-                          segmentColor: placement[9]
+                          attachment: placement[8]
                       }
                     : undefined
         };
@@ -1247,8 +1244,7 @@ export const CrosswordEditor: React.FC = () => {
                     anchor,
                     anchorRole: isStart ? 'start' : 'end',
                     wordDirection: candidate.direction,
-                    arrowStyle: 'auto',
-                    segmentColor: prev[word]?.placement?.segmentColor
+                    arrowStyle: 'auto'
                 }
             }
         }));
@@ -1346,64 +1342,6 @@ export const CrosswordEditor: React.FC = () => {
                     placement: { ...current.placement, attachment, arrowStyle: 'curved' }
                 }
             };
-        });
-    };
-
-    const rememberRecentColor = (color: string) => {
-        setRecentSegmentColors((prev) => [color, ...prev.filter((c) => c !== color)].slice(0, 8));
-    };
-
-    const handleSegmentColorUpdate = (segmentColor: string) => {
-        if (!selectedWord) return;
-        setWordDefinitions((prev) => {
-            const current = prev[selectedWord];
-            if (!current?.placement) return prev;
-            return {
-                ...prev,
-                [selectedWord]: {
-                    ...current,
-                    placement: { ...current.placement, segmentColor }
-                }
-            };
-        });
-        rememberRecentColor(segmentColor);
-    };
-
-    const addCurrentColorToPalette = () => {
-        const color = selectedWord ? wordDefinitions[selectedWord]?.placement?.segmentColor : null;
-        if (!color) return;
-        setSavedSegmentPalette((prev) => (prev.includes(color) ? prev : [...prev, color]));
-    };
-
-    const moveDefinitionInBlackCell = (word: string, direction: 'up' | 'down') => {
-        setWordDefinitions((prev) => {
-            const placement = prev[word]?.placement;
-            if (!placement) return prev;
-
-            const entries = Object.entries(prev);
-            const sameCellWords = entries
-                .filter(([, data]) => data.placement?.x === placement.x && data.placement?.y === placement.y)
-                .map(([w]) => w);
-            const index = sameCellWords.indexOf(word);
-            if (index === -1) return prev;
-
-            const targetIndex = direction === 'up' ? index - 1 : index + 1;
-            if (targetIndex < 0 || targetIndex >= sameCellWords.length) return prev;
-
-            const reordered = [...sameCellWords];
-            [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
-
-            const reorderedMap = new Map(reordered.map((w) => [w, prev[w]]));
-            const next: Record<string, WordDefinitionData> = {};
-            entries.forEach(([w, data]) => {
-                if (reorderedMap.has(w)) {
-                    next[w] = reorderedMap.get(w)!;
-                    reorderedMap.delete(w);
-                } else {
-                    next[w] = data;
-                }
-            });
-            return next;
         });
     };
 
@@ -1702,79 +1640,6 @@ export const CrosswordEditor: React.FC = () => {
                                                 <option value="right">Droite</option>
                                             </select>
                                         </>
-                                    )}
-                                    <label className="input-label">Couleur du segment</label>
-                                    <div className="segment-color-editor">
-                                        <input
-                                            type="color"
-                                            value={wordDefinitions[selectedWord]!.placement!.segmentColor || appearance.blackCellColor}
-                                            onChange={(e) => handleSegmentColorUpdate(e.target.value)}
-                                        />
-                                        <button type="button" className="tool-button" onClick={addCurrentColorToPalette}>
-                                            Ajouter à la palette
-                                        </button>
-                                    </div>
-                                    {recentSegmentColors.length > 0 && (
-                                        <div>
-                                            <label className="input-label">Couleurs récentes</label>
-                                            <div className="color-palette-row">
-                                                {recentSegmentColors.map((color) => (
-                                                    <button
-                                                        key={`recent-${color}`}
-                                                        type="button"
-                                                        className="color-chip"
-                                                        style={{ backgroundColor: color }}
-                                                        onClick={() => handleSegmentColorUpdate(color)}
-                                                        title={color}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {savedSegmentPalette.length > 0 && (
-                                        <div>
-                                            <label className="input-label">Palette enregistrée</label>
-                                            <div className="color-palette-row">
-                                                {savedSegmentPalette.map((color) => (
-                                                    <button
-                                                        key={`saved-${color}`}
-                                                        type="button"
-                                                        className="color-chip"
-                                                        style={{ backgroundColor: color }}
-                                                        onClick={() => handleSegmentColorUpdate(color)}
-                                                        title={color}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {selectedWordCellDefinitions.length > 1 && (
-                                        <div className="definition-order-panel">
-                                            <label className="input-label">Ordre des définitions de la case</label>
-                                            {selectedWordCellDefinitions.map((entry, index) => (
-                                                <div key={`order-${entry.word}`} className="definition-order-row">
-                                                    <span>{index + 1}. {entry.word}</span>
-                                                    <div>
-                                                        <button
-                                                            type="button"
-                                                            className="tool-button"
-                                                            onClick={() => moveDefinitionInBlackCell(entry.word, 'up')}
-                                                            disabled={index === 0}
-                                                        >
-                                                            ↑
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="tool-button"
-                                                            onClick={() => moveDefinitionInBlackCell(entry.word, 'down')}
-                                                            disabled={index === selectedWordCellDefinitions.length - 1}
-                                                        >
-                                                            ↓
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
                                     )}
                                 </div>
                             )}
