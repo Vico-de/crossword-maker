@@ -131,6 +131,7 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
     definitionTextColor: '#f5f5f5',
     borderColor: '#cccccc',
     separatorColor: '#ffffff',
+    separatorWidth: 0.5,
     gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
     definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
 };
@@ -144,6 +145,7 @@ const areAppearancesEqual = (a: AppearanceSettings, b: AppearanceSettings) =>
     a.definitionTextColor === b.definitionTextColor &&
     a.borderColor === b.borderColor &&
     a.separatorColor === b.separatorColor &&
+    a.separatorWidth === b.separatorWidth &&
     a.gridFont === b.gridFont &&
     a.definitionFont === b.definitionFont &&
     a.backgroundImage === b.backgroundImage;
@@ -264,8 +266,8 @@ const unpackGrid = (packed: { n?: string; s: [number, number]; r: string[] }): G
 const buildPlacementsForGrid = (
     grid: Grid | undefined,
     definitions: Record<string, WordDefinitionData>
-): { definitionPlacements: Record<string, { word: string; definition?: string }[]>; arrowPlacements: Record<string, ArrowPlacement[]> } => {
-    const definitionPlacements: Record<string, { word: string; definition?: string }[]> = {};
+): { definitionPlacements: Record<string, { word: string; definition?: string; segmentColor?: string }[]>; arrowPlacements: Record<string, ArrowPlacement[]> } => {
+    const definitionPlacements: Record<string, { word: string; definition?: string; segmentColor?: string }[]> = {};
     const arrowPlacements: Record<string, ArrowPlacement[]> = {};
 
     if (!grid) return { definitionPlacements, arrowPlacements };
@@ -278,7 +280,7 @@ const buildPlacementsForGrid = (
 
         const key = `${x}-${y}`;
         if (!definitionPlacements[key]) definitionPlacements[key] = [];
-        definitionPlacements[key].push({ word, definition: data.definition });
+        definitionPlacements[key].push({ word, definition: data.definition, segmentColor: data.placement.segmentColor });
 
         const target = {
             x: x + (direction === 'right' ? 1 : direction === 'left' ? -1 : 0),
@@ -362,7 +364,8 @@ const renderGridPdfPage = (
         const availableHeight = (cellSize - 6) / Math.max(1, slotCount) - 2;
         const words = text.split(/\s+/).filter(Boolean);
         const longestWord = words.reduce((max, w) => Math.max(max, w.length), 0);
-        const upperBound = Math.min(18, availableHeight, longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18);
+        const slotPenalty = slotCount > 1 ? 0.86 : 1;
+        const upperBound = Math.min(14, availableHeight, longestWord > 0 ? availableWidth / (longestWord * 0.65) : 14) * slotPenalty;
 
         for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
             measureCtx.font = `${size}px ${appearance.definitionFont}`;
@@ -435,6 +438,8 @@ const renderGridPdfPage = (
                     cellDefs.forEach((def, index) => {
                         const startY = posY + (cellSize / slots) * index;
                         const areaHeight = cellSize / slots;
+                        lines.push(rgbFill(def.segmentColor || appearance.blackCellColor));
+                        lines.push(`${posX.toFixed(2)} ${startY.toFixed(2)} ${cellSize.toFixed(2)} ${areaHeight.toFixed(2)} re f`);
                         const content = (def.definition || def.word).toUpperCase();
                         const fontSize = fitDefinitionSize(content, slots);
                         const words = content.split(/\s+/).filter(Boolean);
@@ -466,9 +471,11 @@ const renderGridPdfPage = (
 
                     if (cellDefs.length > 1) {
                         lines.push(rgbStroke(appearance.separatorColor));
-                        lines.push('1 w');
-                        const sepY = posY + cellSize / 2;
-                        lines.push(`${posX.toFixed(2)} ${sepY.toFixed(2)} m ${(posX + cellSize).toFixed(2)} ${sepY.toFixed(2)} l S`);
+                        lines.push(`${appearance.separatorWidth.toFixed(2)} w`);
+                        for (let i = 1; i < cellDefs.length; i += 1) {
+                            const sepY = posY + (cellSize / cellDefs.length) * i;
+                            lines.push(`${posX.toFixed(2)} ${sepY.toFixed(2)} m ${(posX + cellSize).toFixed(2)} ${sepY.toFixed(2)} l S`);
+                        }
                     }
                 }
             } else if (cell.value) {
@@ -707,6 +714,22 @@ export const CrosswordEditor: React.FC = () => {
     );
     const [showSetDialog, setShowSetDialog] = useState(true);
     const [newSetName, setNewSetName] = useState('Nouveau set');
+    const [recentSegmentColors, setRecentSegmentColors] = useState<string[]>(() => {
+        try {
+            const raw = localStorage.getItem('recentSegmentColors');
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
+    const [savedSegmentPalette, setSavedSegmentPalette] = useState<string[]>(() => {
+        try {
+            const raw = localStorage.getItem('savedSegmentPalette');
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
 
     const wordPositions = useMemo(() => {
         if (!state.currentGrid) return [];
@@ -733,6 +756,7 @@ export const CrosswordEditor: React.FC = () => {
             ['--grid-definition-color' as string]: appearance.definitionTextColor,
             ['--grid-border-color' as string]: appearance.borderColor,
             ['--definition-separator-color' as string]: appearance.separatorColor,
+            ['--definition-separator-width' as string]: `${appearance.separatorWidth}px`,
             ['--grid-font-family' as string]: appearance.gridFont,
             ['--definition-font-family' as string]: appearance.definitionFont,
             ['--ui-font-family' as string]: appearance.gridFont
@@ -748,6 +772,14 @@ export const CrosswordEditor: React.FC = () => {
             localStorage.removeItem('currentSetId');
         }
     }, [gridSets, currentSetId]);
+
+    useEffect(() => {
+        localStorage.setItem('recentSegmentColors', JSON.stringify(recentSegmentColors));
+    }, [recentSegmentColors]);
+
+    useEffect(() => {
+        localStorage.setItem('savedSegmentPalette', JSON.stringify(savedSegmentPalette));
+    }, [savedSegmentPalette]);
 
     useEffect(() => {
         const current = gridSets.find((set) => set.id === currentSetId);
@@ -1370,6 +1402,15 @@ export const CrosswordEditor: React.FC = () => {
             arrowPlacements: arrows
         };
     }, [filteredDefinitions, selectedWord, wordPositions, state.currentGrid]);
+
+    const selectedWordCellDefinitions = useMemo(() => {
+        if (!selectedWord) return [] as { word: string; data: WordDefinitionData }[];
+        const placement = wordDefinitions[selectedWord]?.placement;
+        if (!placement) return [] as { word: string; data: WordDefinitionData }[];
+        return Object.entries(wordDefinitions)
+            .filter(([, data]) => data.placement?.x === placement.x && data.placement?.y === placement.y)
+            .map(([word, data]) => ({ word, data }));
+    }, [selectedWord, wordDefinitions]);
 
     return (
         <div className="crossword-editor" onMouseDown={handleOutsideClick} style={appearanceVars}>

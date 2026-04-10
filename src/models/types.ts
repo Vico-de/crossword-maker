@@ -137,6 +137,7 @@ export interface GridSet {
         definitionTextColor: string;
         borderColor: string;
         separatorColor: string;
+        separatorWidth?: number;
         gridFont: string;
         definitionFont: string;
     };
