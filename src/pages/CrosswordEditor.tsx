@@ -474,8 +474,8 @@ const renderGridPdfPage = (
             lines.push(`${posX.toFixed(2)} ${posY.toFixed(2)} ${cellSize.toFixed(2)} ${cellSize.toFixed(2)} re f`);
 
             if (cell.isBlack) {
-                const cellKey = `${x}-${y}`;
-                const cellDefs = definitionPlacements[cellKey];
+                const key = `${x}-${y}`;
+                const cellDefs = definitionPlacements[key];
                 if (cellDefs && cellDefs.length > 0 && measureCtx) {
                     const slots = cellDefs.length;
                     cellDefs.forEach((def, index) => {
