@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Grid, GridSet, SavedGrid, WordDefinitionData } from '../../models/types';
-import { useGlobalColorPalette } from '../../hooks/useGlobalColorPalette';
 import './Toolbar.css';
 
 export interface AppearanceSettings {
@@ -65,7 +64,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     onDirectionToggle
 }) => {
     const [activePanel, setActivePanel] = useState<'info' | 'appearance' | null>(null);
-    const { recentColors, savedPalette, addRecentColor, saveColor } = useGlobalColorPalette();
     const [gridName, setGridName] = useState(currentGrid?.name || '');
     const [showLoadDropdown, setShowLoadDropdown] = useState(false);
     const [dimensions, setDimensions] = useState({
@@ -260,7 +258,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         if (sanitized !== appearance[key]) {
             onAppearanceChange({ [key]: sanitized });
         }
-        addRecentColor(sanitized);
     };
 
     const resolveColorValue = (key: ColorKey) =>
@@ -545,37 +542,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         className="color-text-input"
                                         placeholder="#000000 ou rgb()"
                                     />
-                                </div>
-                                <div className="color-palette-row">
-                                    {recentColors.slice(0, 8).map((color) => (
-                                        <button
-                                            key={`${key}-recent-${color}`}
-                                            type="button"
-                                            className="color-chip"
-                                            style={{ backgroundColor: color }}
-                                            onClick={() => commitColor(key, color)}
-                                            title={`Récent ${color}`}
-                                        />
-                                    ))}
-                                </div>
-                                <div className="color-palette-row">
-                                    {savedPalette.map((color) => (
-                                        <button
-                                            key={`${key}-saved-${color}`}
-                                            type="button"
-                                            className="color-chip"
-                                            style={{ backgroundColor: color }}
-                                            onClick={() => commitColor(key, color)}
-                                            title={`Palette ${color}`}
-                                        />
-                                    ))}
-                                    <button
-                                        type="button"
-                                        className="tool-button"
-                                        onClick={() => saveColor(colorDrafts[key])}
-                                    >
-                                        Enregistrer la couleur
-                                    </button>
                                 </div>
                             </div>
                         ))}
