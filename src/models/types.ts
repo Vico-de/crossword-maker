@@ -38,6 +38,9 @@ export interface WordDefinitionPlacement {
     anchor: { x: number; y: number };
     anchorRole: 'start' | 'end';
     wordDirection: 'horizontal' | 'vertical';
+    arrowStyle?: 'auto' | 'curved';
+    curvedVariant?: 'curved-right' | 'curved-left';
+    attachment?: 'left' | 'right' | 'top' | 'bottom';
 }
 
 export interface WordDefinitionData {
