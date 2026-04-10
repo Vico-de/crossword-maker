@@ -131,6 +131,7 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
     definitionTextColor: '#f5f5f5',
     borderColor: '#cccccc',
     separatorColor: '#ffffff',
+    separatorWidth: 0.5,
     gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
     definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
 };
@@ -144,6 +145,7 @@ const areAppearancesEqual = (a: AppearanceSettings, b: AppearanceSettings) =>
     a.definitionTextColor === b.definitionTextColor &&
     a.borderColor === b.borderColor &&
     a.separatorColor === b.separatorColor &&
+    a.separatorWidth === b.separatorWidth &&
     a.gridFont === b.gridFont &&
     a.definitionFont === b.definitionFont &&
     a.backgroundImage === b.backgroundImage;
@@ -158,7 +160,11 @@ type PackedDefinition = [
             WordDefinitionPlacement['direction'],
             [number, number],
             WordDefinitionPlacement['anchorRole'],
-            WordDirection
+            WordDirection,
+            WordDefinitionPlacement['arrowStyle']?,
+            WordDefinitionPlacement['curvedVariant']?,
+            WordDefinitionPlacement['attachment']?,
+            WordDefinitionPlacement['segmentColor']?
         ]
         | undefined
 ];
@@ -182,7 +188,11 @@ const packDefinitions = (definitions: Record<string, WordDefinitionData>): Packe
                   data.placement.direction,
                   [data.placement.anchor.x, data.placement.anchor.y],
                   data.placement.anchorRole,
-                  data.placement.wordDirection
+                  data.placement.wordDirection,
+                  data.placement.arrowStyle,
+                  data.placement.curvedVariant,
+                  data.placement.attachment,
+                  data.placement.segmentColor
               ]
             : undefined
     ]);
@@ -202,7 +212,11 @@ const unpackDefinitions = (packed: PackedDefinition[]): Record<string, WordDefin
                           direction: placement[2],
                           anchor: { x: placement[3][0], y: placement[3][1] },
                           anchorRole: placement[4],
-                          wordDirection: placement[5]
+                          wordDirection: placement[5],
+                          arrowStyle: placement[6] || 'auto',
+                          curvedVariant: placement[7],
+                          attachment: placement[8],
+                          segmentColor: placement[9]
                       }
                     : undefined
         };
@@ -255,21 +269,21 @@ const unpackGrid = (packed: { n?: string; s: [number, number]; r: string[] }): G
 const buildPlacementsForGrid = (
     grid: Grid | undefined,
     definitions: Record<string, WordDefinitionData>
-): { definitionPlacements: Record<string, { word: string; definition?: string }[]>; arrowPlacements: Record<string, ArrowPlacement[]> } => {
-    const definitionPlacements: Record<string, { word: string; definition?: string }[]> = {};
+): { definitionPlacements: Record<string, { word: string; definition?: string; segmentColor?: string }[]>; arrowPlacements: Record<string, ArrowPlacement[]> } => {
+    const definitionPlacements: Record<string, { word: string; definition?: string; segmentColor?: string }[]> = {};
     const arrowPlacements: Record<string, ArrowPlacement[]> = {};
 
     if (!grid) return { definitionPlacements, arrowPlacements };
 
     Object.entries(definitions).forEach(([word, data]) => {
         if (!data.placement) return;
-        const { x, y, direction, anchorRole, wordDirection, anchor } = data.placement;
+        const { x, y, direction, anchorRole, wordDirection, anchor, arrowStyle, curvedVariant, attachment } = data.placement;
         const cell = grid.cells[y]?.[x];
         if (!cell || !cell.isBlack) return;
 
         const key = `${x}-${y}`;
         if (!definitionPlacements[key]) definitionPlacements[key] = [];
-        definitionPlacements[key].push({ word, definition: data.definition });
+        definitionPlacements[key].push({ word, definition: data.definition, segmentColor: data.placement.segmentColor });
 
         const target = {
             x: x + (direction === 'right' ? 1 : direction === 'left' ? -1 : 0),
@@ -287,19 +301,22 @@ const buildPlacementsForGrid = (
             const arrowKey = `${target.x}-${target.y}`;
             if (!arrowPlacements[arrowKey]) arrowPlacements[arrowKey] = [];
 
-            let variant: ArrowPlacement['variant'] = 'straight';
-            if (wordDirection === 'horizontal' && (direction === 'down' || direction === 'up')) {
-                variant = anchorRole === 'start' ? 'curved-right' : 'curved-left';
-            }
-
-            const attachment: ArrowPlacement['attachment'] =
+            const autoVariant: ArrowPlacement['variant'] =
+                wordDirection === 'horizontal' && (direction === 'down' || direction === 'up')
+                    ? anchorRole === 'start'
+                        ? 'curved-right'
+                        : 'curved-left'
+                    : 'straight';
+            const autoAttachment: ArrowPlacement['attachment'] =
                 x < target.x ? 'left' : x > target.x ? 'right' : y < target.y ? 'top' : 'bottom';
+            const variant: ArrowPlacement['variant'] = arrowStyle === 'curved' ? (curvedVariant || 'curved-right') : autoVariant;
+            const resolvedAttachment: ArrowPlacement['attachment'] = arrowStyle === 'curved' ? (attachment || autoAttachment) : autoAttachment;
 
             arrowPlacements[arrowKey].push({
                 direction,
                 variant,
                 from: anchor,
-                attachment
+                attachment: resolvedAttachment
             });
         }
     });
@@ -350,7 +367,8 @@ const renderGridPdfPage = (
         const availableHeight = (cellSize - 6) / Math.max(1, slotCount) - 2;
         const words = text.split(/\s+/).filter(Boolean);
         const longestWord = words.reduce((max, w) => Math.max(max, w.length), 0);
-        const upperBound = Math.min(18, availableHeight, longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18);
+        const slotPenalty = slotCount > 1 ? 0.86 : 1;
+        const upperBound = Math.min(14, availableHeight, longestWord > 0 ? availableWidth / (longestWord * 0.65) : 14) * slotPenalty;
 
         for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
             measureCtx.font = `${size}px ${appearance.definitionFont}`;
@@ -423,6 +441,8 @@ const renderGridPdfPage = (
                     cellDefs.forEach((def, index) => {
                         const startY = posY + (cellSize / slots) * index;
                         const areaHeight = cellSize / slots;
+                        lines.push(rgbFill(def.segmentColor || appearance.blackCellColor));
+                        lines.push(`${posX.toFixed(2)} ${startY.toFixed(2)} ${cellSize.toFixed(2)} ${areaHeight.toFixed(2)} re f`);
                         const content = (def.definition || def.word).toUpperCase();
                         const fontSize = fitDefinitionSize(content, slots);
                         const words = content.split(/\s+/).filter(Boolean);
@@ -454,9 +474,11 @@ const renderGridPdfPage = (
 
                     if (cellDefs.length > 1) {
                         lines.push(rgbStroke(appearance.separatorColor));
-                        lines.push('1 w');
-                        const sepY = posY + cellSize / 2;
-                        lines.push(`${posX.toFixed(2)} ${sepY.toFixed(2)} m ${(posX + cellSize).toFixed(2)} ${sepY.toFixed(2)} l S`);
+                        lines.push(`${appearance.separatorWidth.toFixed(2)} w`);
+                        for (let i = 1; i < cellDefs.length; i += 1) {
+                            const sepY = posY + (cellSize / cellDefs.length) * i;
+                            lines.push(`${posX.toFixed(2)} ${sepY.toFixed(2)} m ${(posX + cellSize).toFixed(2)} ${sepY.toFixed(2)} l S`);
+                        }
                     }
                 }
             } else if (cell.value) {
@@ -695,6 +717,22 @@ export const CrosswordEditor: React.FC = () => {
     );
     const [showSetDialog, setShowSetDialog] = useState(true);
     const [newSetName, setNewSetName] = useState('Nouveau set');
+    const [recentSegmentColors, setRecentSegmentColors] = useState<string[]>(() => {
+        try {
+            const raw = localStorage.getItem('recentSegmentColors');
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
+    const [savedSegmentPalette, setSavedSegmentPalette] = useState<string[]>(() => {
+        try {
+            const raw = localStorage.getItem('savedSegmentPalette');
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
 
     const wordPositions = useMemo(() => {
         if (!state.currentGrid) return [];
@@ -721,6 +759,7 @@ export const CrosswordEditor: React.FC = () => {
             ['--grid-definition-color' as string]: appearance.definitionTextColor,
             ['--grid-border-color' as string]: appearance.borderColor,
             ['--definition-separator-color' as string]: appearance.separatorColor,
+            ['--definition-separator-width' as string]: `${appearance.separatorWidth}px`,
             ['--grid-font-family' as string]: appearance.gridFont,
             ['--definition-font-family' as string]: appearance.definitionFont,
             ['--ui-font-family' as string]: appearance.gridFont
@@ -736,6 +775,14 @@ export const CrosswordEditor: React.FC = () => {
             localStorage.removeItem('currentSetId');
         }
     }, [gridSets, currentSetId]);
+
+    useEffect(() => {
+        localStorage.setItem('recentSegmentColors', JSON.stringify(recentSegmentColors));
+    }, [recentSegmentColors]);
+
+    useEffect(() => {
+        localStorage.setItem('savedSegmentPalette', JSON.stringify(savedSegmentPalette));
+    }, [savedSegmentPalette]);
 
     useEffect(() => {
         const current = gridSets.find((set) => set.id === currentSetId);
@@ -1193,7 +1240,16 @@ export const CrosswordEditor: React.FC = () => {
             ...prev,
             [word]: {
                 definition: prev[word]?.definition || '',
-                placement: { x, y, direction, anchor, anchorRole: isStart ? 'start' : 'end', wordDirection: candidate.direction }
+                placement: {
+                    x,
+                    y,
+                    direction,
+                    anchor,
+                    anchorRole: isStart ? 'start' : 'end',
+                    wordDirection: candidate.direction,
+                    arrowStyle: 'auto',
+                    segmentColor: prev[word]?.placement?.segmentColor
+                }
             }
         }));
         setSelectedWord(word);
@@ -1240,6 +1296,114 @@ export const CrosswordEditor: React.FC = () => {
                     placement: { ...current.placement, direction }
                 }
             };
+        });
+    };
+
+    const handleArrowStyleUpdate = (arrowStyle: 'auto' | 'curved') => {
+        if (!selectedWord) return;
+        setWordDefinitions((prev) => {
+            const current = prev[selectedWord];
+            if (!current?.placement) return prev;
+            return {
+                ...prev,
+                [selectedWord]: {
+                    ...current,
+                    placement: {
+                        ...current.placement,
+                        arrowStyle,
+                        curvedVariant: arrowStyle === 'curved' ? current.placement.curvedVariant || 'curved-right' : undefined,
+                        attachment: arrowStyle === 'curved' ? current.placement.attachment || 'top' : undefined
+                    }
+                }
+            };
+        });
+    };
+
+    const handleCurvedVariantUpdate = (curvedVariant: 'curved-right' | 'curved-left') => {
+        if (!selectedWord) return;
+        setWordDefinitions((prev) => {
+            const current = prev[selectedWord];
+            if (!current?.placement) return prev;
+            return {
+                ...prev,
+                [selectedWord]: {
+                    ...current,
+                    placement: { ...current.placement, curvedVariant, arrowStyle: 'curved' }
+                }
+            };
+        });
+    };
+
+    const handleAttachmentUpdate = (attachment: 'top' | 'bottom' | 'left' | 'right') => {
+        if (!selectedWord) return;
+        setWordDefinitions((prev) => {
+            const current = prev[selectedWord];
+            if (!current?.placement) return prev;
+            return {
+                ...prev,
+                [selectedWord]: {
+                    ...current,
+                    placement: { ...current.placement, attachment, arrowStyle: 'curved' }
+                }
+            };
+        });
+    };
+
+    const rememberRecentColor = (color: string) => {
+        setRecentSegmentColors((prev) => [color, ...prev.filter((c) => c !== color)].slice(0, 8));
+    };
+
+    const handleSegmentColorUpdate = (segmentColor: string) => {
+        if (!selectedWord) return;
+        setWordDefinitions((prev) => {
+            const current = prev[selectedWord];
+            if (!current?.placement) return prev;
+            return {
+                ...prev,
+                [selectedWord]: {
+                    ...current,
+                    placement: { ...current.placement, segmentColor }
+                }
+            };
+        });
+        rememberRecentColor(segmentColor);
+    };
+
+    const addCurrentColorToPalette = () => {
+        const color = selectedWord ? wordDefinitions[selectedWord]?.placement?.segmentColor : null;
+        if (!color) return;
+        setSavedSegmentPalette((prev) => (prev.includes(color) ? prev : [...prev, color]));
+    };
+
+    const moveDefinitionInBlackCell = (word: string, direction: 'up' | 'down') => {
+        setWordDefinitions((prev) => {
+            const placement = prev[word]?.placement;
+            if (!placement) return prev;
+
+            const entries = Object.entries(prev);
+            const sameCellWords = entries
+                .filter(([, data]) => data.placement?.x === placement.x && data.placement?.y === placement.y)
+                .map(([w]) => w);
+            const index = sameCellWords.indexOf(word);
+            if (index === -1) return prev;
+
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= sameCellWords.length) return prev;
+
+            const reordered = [...sameCellWords];
+            [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+
+            const reorderedMap = new Map(reordered.map((w) => [w, prev[w]]));
+            const next: Record<string, WordDefinitionData> = {};
+            entries.forEach(([w, data]) => {
+                if (reorderedMap.has(w)) {
+                    next[w] = reorderedMap.get(w)!;
+                    reorderedMap.delete(w);
+                } else {
+                    next[w] = data;
+                }
+            });
+            return next;
         });
     };
 
@@ -1300,6 +1464,15 @@ export const CrosswordEditor: React.FC = () => {
             arrowPlacements: arrows
         };
     }, [filteredDefinitions, selectedWord, wordPositions, state.currentGrid]);
+
+    const selectedWordCellDefinitions = useMemo(() => {
+        if (!selectedWord) return [] as { word: string; data: WordDefinitionData }[];
+        const placement = wordDefinitions[selectedWord]?.placement;
+        if (!placement) return [] as { word: string; data: WordDefinitionData }[];
+        return Object.entries(wordDefinitions)
+            .filter(([, data]) => data.placement?.x === placement.x && data.placement?.y === placement.y)
+            .map(([word, data]) => ({ word, data }));
+    }, [selectedWord, wordDefinitions]);
 
     return (
         <div className="crossword-editor" onMouseDown={handleOutsideClick} style={appearanceVars}>
@@ -1500,6 +1673,109 @@ export const CrosswordEditor: React.FC = () => {
                                         <option value="left">← Vers la gauche</option>
                                         <option value="right">→ Vers la droite</option>
                                     </select>
+                                    <label className="input-label">Mode de tracé</label>
+                                    <select
+                                        value={wordDefinitions[selectedWord]!.placement!.arrowStyle || 'auto'}
+                                        onChange={(e) => handleArrowStyleUpdate(e.target.value as 'auto' | 'curved')}
+                                    >
+                                        <option value="auto">Par défaut (automatique)</option>
+                                        <option value="curved">Coudée personnalisée</option>
+                                    </select>
+                                    {(wordDefinitions[selectedWord]!.placement!.arrowStyle || 'auto') === 'curved' && (
+                                        <>
+                                            <label className="input-label">Direction coudée</label>
+                                            <select
+                                                value={wordDefinitions[selectedWord]!.placement!.curvedVariant || 'curved-right'}
+                                                onChange={(e) => handleCurvedVariantUpdate(e.target.value as 'curved-right' | 'curved-left')}
+                                            >
+                                                <option value="curved-right">↳ Coudée droite</option>
+                                                <option value="curved-left">↲ Coudée gauche</option>
+                                            </select>
+                                            <label className="input-label">Position (vs case noire)</label>
+                                            <select
+                                                value={wordDefinitions[selectedWord]!.placement!.attachment || 'top'}
+                                                onChange={(e) => handleAttachmentUpdate(e.target.value as 'top' | 'bottom' | 'left' | 'right')}
+                                            >
+                                                <option value="top">Haut</option>
+                                                <option value="bottom">Bas</option>
+                                                <option value="left">Gauche</option>
+                                                <option value="right">Droite</option>
+                                            </select>
+                                        </>
+                                    )}
+                                    <label className="input-label">Couleur du segment</label>
+                                    <div className="segment-color-editor">
+                                        <input
+                                            type="color"
+                                            value={wordDefinitions[selectedWord]!.placement!.segmentColor || appearance.blackCellColor}
+                                            onChange={(e) => handleSegmentColorUpdate(e.target.value)}
+                                        />
+                                        <button type="button" className="tool-button" onClick={addCurrentColorToPalette}>
+                                            Ajouter à la palette
+                                        </button>
+                                    </div>
+                                    {recentSegmentColors.length > 0 && (
+                                        <div>
+                                            <label className="input-label">Couleurs récentes</label>
+                                            <div className="color-palette-row">
+                                                {recentSegmentColors.map((color) => (
+                                                    <button
+                                                        key={`recent-${color}`}
+                                                        type="button"
+                                                        className="color-chip"
+                                                        style={{ backgroundColor: color }}
+                                                        onClick={() => handleSegmentColorUpdate(color)}
+                                                        title={color}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {savedSegmentPalette.length > 0 && (
+                                        <div>
+                                            <label className="input-label">Palette enregistrée</label>
+                                            <div className="color-palette-row">
+                                                {savedSegmentPalette.map((color) => (
+                                                    <button
+                                                        key={`saved-${color}`}
+                                                        type="button"
+                                                        className="color-chip"
+                                                        style={{ backgroundColor: color }}
+                                                        onClick={() => handleSegmentColorUpdate(color)}
+                                                        title={color}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {selectedWordCellDefinitions.length > 1 && (
+                                        <div className="definition-order-panel">
+                                            <label className="input-label">Ordre des définitions de la case</label>
+                                            {selectedWordCellDefinitions.map((entry, index) => (
+                                                <div key={`order-${entry.word}`} className="definition-order-row">
+                                                    <span>{index + 1}. {entry.word}</span>
+                                                    <div>
+                                                        <button
+                                                            type="button"
+                                                            className="tool-button"
+                                                            onClick={() => moveDefinitionInBlackCell(entry.word, 'up')}
+                                                            disabled={index === 0}
+                                                        >
+                                                            ↑
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="tool-button"
+                                                            onClick={() => moveDefinitionInBlackCell(entry.word, 'down')}
+                                                            disabled={index === selectedWordCellDefinitions.length - 1}
+                                                        >
+                                                            ↓
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

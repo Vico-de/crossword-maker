@@ -10,6 +10,7 @@ type DefinitionDirection = 'up' | 'down' | 'left' | 'right';
 interface DefinitionMarker {
     word: string;
     definition?: string;
+    segmentColor?: string;
 }
 
 interface ArrowMarker {
@@ -40,9 +41,10 @@ const computeFitFontSize = (text: string, slotCount: number) => {
     const words = text.split(/\s+/).filter(Boolean);
     const longestWord = words.reduce((max, w) => Math.max(max, w.length), 0);
 
-    const maxHeightSize = availableHeight / Math.max(1, words.length) / 1.15;
+    const maxHeightSize = availableHeight / Math.max(1, words.length) / 1.35;
     const maxWidthSize = longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18;
-    const upperBound = Math.min(18, maxHeightSize, maxWidthSize);
+    const slotPenalty = slotCount > 1 ? 0.86 : 1;
+    const upperBound = Math.min(14, maxHeightSize, maxWidthSize) * slotPenalty;
 
     for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
         const charWidth = 0.52 * size;
@@ -106,7 +108,13 @@ const CrosswordCell: React.FC<CellProps> = ({
                         (() => {
                             const markerText = (definition.definition || definition.word).toUpperCase();
                             return (
-                                <div key={`${definition.word}-${index}`} className="definition-marker">
+                                <div
+                                    key={`${definition.word}-${index}`}
+                                    className="definition-marker"
+                                    style={{
+                                        backgroundColor: definition.segmentColor || 'var(--grid-black-color, #000)'
+                                    }}
+                                >
                                     <span
                                         className="definition-text"
                                         style={{

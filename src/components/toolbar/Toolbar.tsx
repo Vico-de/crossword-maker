@@ -10,6 +10,7 @@ export interface AppearanceSettings {
     definitionTextColor: string;
     borderColor: string;
     separatorColor: string;
+    separatorWidth: number;
     gridFont: string;
     definitionFont: string;
     backgroundImage?: string;
@@ -544,6 +545,24 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 </div>
                             </div>
                         ))}
+                        <div className="font-field">
+                            <label>Épaisseur séparateurs définitions</label>
+                            <input
+                                type="number"
+                                min={0.25}
+                                max={3}
+                                step={0.25}
+                                value={appearance.separatorWidth}
+                                onChange={(e) =>
+                                    onAppearanceChange({
+                                        separatorWidth: Math.max(0.25, Math.min(3, Number(e.target.value) || 0.25))
+                                    })
+                                }
+                                onFocus={() => onInputFocus(true)}
+                                onBlur={() => onInputFocus(false)}
+                                className="color-text-input"
+                            />
+                        </div>
 
                         <div className="font-field">
                             <label>Police de la grille</label>
