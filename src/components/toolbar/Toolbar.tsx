@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Grid, GridSet, SavedGrid, WordDefinitionData } from '../../models/types';
+import { useGlobalColorPalette } from '../../hooks/useGlobalColorPalette';
 import './Toolbar.css';
 
 export interface AppearanceSettings {
@@ -10,6 +11,8 @@ export interface AppearanceSettings {
     definitionTextColor: string;
     borderColor: string;
     separatorColor: string;
+    separatorWidth: number;
+    definitionBaseFontSize: number;
     gridFont: string;
     definitionFont: string;
     backgroundImage?: string;
@@ -63,6 +66,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     onDirectionToggle
 }) => {
     const [activePanel, setActivePanel] = useState<'info' | 'appearance' | null>(null);
+    const { recentColors, savedPalette, addRecentColor, saveColor } = useGlobalColorPalette();
     const [gridName, setGridName] = useState(currentGrid?.name || '');
     const [showLoadDropdown, setShowLoadDropdown] = useState(false);
     const [dimensions, setDimensions] = useState({
@@ -257,6 +261,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         if (sanitized !== appearance[key]) {
             onAppearanceChange({ [key]: sanitized });
         }
+        addRecentColor(sanitized);
     };
 
     const resolveColorValue = (key: ColorKey) =>
@@ -542,8 +547,75 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         placeholder="#000000 ou rgb()"
                                     />
                                 </div>
+                                <div className="color-palette-row">
+                                    {recentColors.slice(0, 8).map((color) => (
+                                        <button
+                                            key={`${key}-recent-${color}`}
+                                            type="button"
+                                            className="color-chip"
+                                            style={{ backgroundColor: color }}
+                                            onClick={() => commitColor(key, color)}
+                                            title={`Récent ${color}`}
+                                        />
+                                    ))}
+                                </div>
+                                <div className="color-palette-row">
+                                    {savedPalette.map((color) => (
+                                        <button
+                                            key={`${key}-saved-${color}`}
+                                            type="button"
+                                            className="color-chip"
+                                            style={{ backgroundColor: color }}
+                                            onClick={() => commitColor(key, color)}
+                                            title={`Palette ${color}`}
+                                        />
+                                    ))}
+                                    <button
+                                        type="button"
+                                        className="tool-button"
+                                        onClick={() => saveColor(colorDrafts[key])}
+                                    >
+                                        Enregistrer la couleur
+                                    </button>
+                                </div>
                             </div>
                         ))}
+                        <div className="font-field">
+                            <label>Épaisseur séparateurs définitions</label>
+                            <input
+                                type="number"
+                                min={0.25}
+                                max={3}
+                                step={0.25}
+                                value={appearance.separatorWidth}
+                                onChange={(e) =>
+                                    onAppearanceChange({
+                                        separatorWidth: Math.max(0.25, Math.min(3, Number(e.target.value) || 0.25))
+                                    })
+                                }
+                                onFocus={() => onInputFocus(true)}
+                                onBlur={() => onInputFocus(false)}
+                                className="color-text-input"
+                            />
+                        </div>
+                        <div className="font-field">
+                            <label>Taille de police définitions (base)</label>
+                            <input
+                                type="number"
+                                min={8}
+                                max={16}
+                                step={1}
+                                value={appearance.definitionBaseFontSize}
+                                onChange={(e) =>
+                                    onAppearanceChange({
+                                        definitionBaseFontSize: Math.max(8, Math.min(16, Number(e.target.value) || 10))
+                                    })
+                                }
+                                onFocus={() => onInputFocus(true)}
+                                onBlur={() => onInputFocus(false)}
+                                className="color-text-input"
+                            />
+                        </div>
 
                         <div className="font-field">
                             <label>Police de la grille</label>

@@ -79,7 +79,7 @@
 }
 
 .definition-markers.multiple {
-  justify-content: space-between;
+  justify-content: stretch;
 }
 
 .definition-marker {
@@ -92,17 +92,11 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: var(--grid-black-color, #000);
 }
 
-.definition-markers.multiple::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: var(--definition-separator-color, rgba(255, 255, 255, 0.9));
-  pointer-events: none;
+.definition-markers.multiple .definition-marker + .definition-marker {
+  border-top: var(--definition-separator-width, 1px) solid var(--definition-separator-color, rgba(255, 255, 255, 0.9));
 }
 
 .definition-text {
