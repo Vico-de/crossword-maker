@@ -1,43 +1,43 @@
-export interface CrosswordState {
-    currentGrid?: {
-        name: string;
-        cells: Cell[][];
-        size: { width: number; height: number };
-        words: GridWord[];
-    };
-    selectedCell: { x: number; y: number } | null;
-    selectedDirection: 'horizontal' | 'vertical';
-    userDictionary: Dictionary;
-    savedGrids: SavedGrid[];  // Ajout de cette ligne
-}
+export type Direction = 'horizontal' | 'vertical';
 
-export interface Word {
-    id: string;
-    definition?: string;
-    // autres propriétés nécessaires
-}
-
-export interface Dictionary {
-    // définir la structure de votre dictionnaire
-}
-// Représente une cellule individuelle dans la grille
+// Une cellule individuelle de la grille.
 export interface Cell {
     value: string;
     isBlack: boolean;
-    definition?: string;  // La définition à afficher dans la case noire
-    hasValidBlackCell?: boolean;  // Pour indiquer si le mot a une case noire valide pour la définition
     x: number;
     y: number;
-    // ajoutez d'autres propriétés si nécessaire
+    isHighlighted?: boolean;
 }
 
+// La grille complète.
+export interface Grid {
+    cells: Cell[][];
+    size: { width: number; height: number };
+    name?: string;
+    set?: string;
+    words?: GridWord[];
+    status?: 'initial' | 'loaded';
+    // Séparateurs pointillés entre deux cases voisines. Clé : `${x}-${y}-r`
+    // (bord droit) ou `${x}-${y}-b` (bord bas) de la case (x, y).
+    separators?: string[];
+}
+
+// Un mot placé dans la grille.
+export interface GridWord {
+    word: string;
+    x: number;
+    y: number;
+    direction: Direction;
+}
+
+// Où et comment afficher la flèche d'une définition.
 export interface WordDefinitionPlacement {
     x: number;
     y: number;
     direction: 'up' | 'down' | 'left' | 'right';
     anchor: { x: number; y: number };
     anchorRole: 'start' | 'end';
-    wordDirection: 'horizontal' | 'vertical';
+    wordDirection: Direction;
     arrowStyle?: 'auto' | 'curved';
     curvedVariant?: 'curved-right' | 'curved-left';
     attachment?: 'left' | 'right' | 'top' | 'bottom';
@@ -52,97 +52,35 @@ export interface WordDefinitionData {
     placement?: WordDefinitionPlacement;
 }
 
-// Représente la grille complète
-export interface Grid {
-    cells: Cell[][];
-    size: {
-        width: number;
-        height: number;
-    };
-    name?: string;
-    words?: GridWord[];
-}
-
-// Représente une définition de mot
-export interface Definition {
-    text: string;           // Le texte de la définition
-    hint?: string;          // Indice optionnel
-    difficulty?: number;    // Niveau de difficulté (1-5)
-    category?: string;      // Catégorie (ex: "Histoire", "Géographie", etc.)
-}
-
-// Représente un mot sauvegardé par l'utilisateur
-export interface UserWord {
-    id: string;            // Identifiant unique
-    word: string;          // Le mot
-    definition: Definition;// Sa définition
-    language?: string;     // Langue du mot
-    dateAdded?: Date;     // Date d'ajout
-    timesUsed?: number;   // Nombre d'utilisations
-}
-
-// Représente un mot placé dans la grille
-export interface GridWord {
-    word: string;
-    x: number;
-    y: number;
-    direction: 'horizontal' | 'vertical';
-}
-
-// Types d'actions possibles dans le jeu
-export type Direction = 'horizontal' | 'vertical';
-
-// État du jeu
-export interface GameState {
-    isEditing: boolean;    // Mode édition ou jeu
-    isComplete: boolean;   // Si la grille est complétée
-    timer?: number;        // Temps écoulé en secondes
-    score?: number;        // Score du joueur
-}
-
-// Configuration du jeu
-export interface GameConfig {
-    allowHints: boolean;   // Si les indices sont autorisés
-    timerEnabled: boolean; // Si le chronomètre est activé
-    difficulty: 'easy' | 'medium' | 'hard'; // Niveau de difficulté
-    language: string;      // Langue du jeu
-    gridSize: {
-        width: number;
-        height: number;
-    };
-}
-
-// Stats du joueur
-export interface PlayerStats {
-    gamesCompleted: number;
-    averageTime: number;
-    bestTime: number;
-    totalScore: number;
-    wordsFound: number;
-}
-// Modifions aussi l'interface SavedGrid pour utiliser le bon type
+// Une grille sauvegardée par l'utilisateur.
 export interface SavedGrid {
     id: string;
     name: string;
     timestamp: number;
     grid: Grid;
     definitions?: Record<string, WordDefinitionData>;
+    // Pool de définitions (par mot), conservé même si le mot disparaît de la grille.
+    pool?: Record<string, string>;
 }
 
+// Un ensemble de grilles partageant une apparence.
 export interface GridSet {
     id: string;
     name: string;
     grids: SavedGrid[];
-    appearance?: {
-        blackCellColor: string;
-        cellBackgroundColor: string;
-        arrowColor: string;
-        letterColor: string;
-        definitionTextColor: string;
-        borderColor: string;
-        separatorColor: string;
-        separatorWidth?: number;
-        gridFont: string;
-        definitionFont: string;
-    };
+    appearance?: AppearanceSettings;
+}
+
+export interface AppearanceSettings {
+    blackCellColor: string;
+    cellBackgroundColor: string;
+    arrowColor: string;
+    letterColor: string;
+    definitionTextColor: string;
+    borderColor: string;
+    separatorColor: string;
+    separatorWidth: number;
+    gridFont: string;
+    definitionFont: string;
+    backgroundImage?: string;
 }

@@ -1,0 +1,3 @@
+[submodule ".claude/skills/vite"]
+	path = .claude/skills/vite
+	url = https://github.com/OpenAEC-Foundation/Vite-Claude-Skill-Package.git
