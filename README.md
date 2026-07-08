@@ -8,6 +8,7 @@ Démo en ligne : https://vico-de.github.io/crossword-maker/
 1. Installer les dépendances : `npm install`
 2. Lancer en mode développement : `npm run dev`
 3. Vérifier la compilation : `npm run build`
+4. Installer les skills : `npx skills update`
 
 ## Utilisation rapide
 - Au chargement, choisissez **Nouveau set de grille**, **Charger un set existant** ou **Charger un set local**. Vous pouvez aussi supprimer des sets stockés avant d'entrer dans l'éditeur.
