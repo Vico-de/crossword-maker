@@ -68,8 +68,10 @@
     let editMode = $state<'normal' | 'separator'>('normal');
     let sepFirst = $state<{ x: number; y: number } | null>(null);
     let previewAppearance = $state(false);
+    let previewWithoutLetters = $state(false);
 
     let gridAreaEl = $state<HTMLElement | null>(null);
+    let gridContainerEl = $state<HTMLElement | null>(null);
     let dbFileInput = $state<HTMLInputElement | null>(null);
 
     // Apparence : utilisée uniquement pour l'export PDF (toujours en clair).
@@ -456,7 +458,11 @@
     };
     const exportGridPdf = () => {
         if (!dialogSelectedGrid) return;
-        downloadPdf([renderGridPdfPage(dialogSelectedGrid.grid, dialogSelectedGrid.definitions || {}, appearance)], `${slug(dialogSelectedGrid.name)}.pdf`);
+        const pages = [
+            renderGridPdfPage(dialogSelectedGrid.grid, dialogSelectedGrid.definitions || {}, appearance, { includeLetters: false }),
+            renderGridPdfPage(dialogSelectedGrid.grid, dialogSelectedGrid.definitions || {}, appearance, { includeLetters: true })
+        ];
+        downloadPdf(pages, `${slug(dialogSelectedGrid.name)}.pdf`);
     };
     const exportSetJson = () => {
         if (!dialogSelectedGrid) return;
@@ -466,10 +472,12 @@
     const exportSetPdf = () => {
         if (!dialogSelectedGrid) return;
         const key = setKeyOf(dialogSelectedGrid);
-        downloadPdf(
-            gridsInSet(key).map((entry) => renderGridPdfPage(entry.grid, entry.definitions || {}, appearance)),
-            `${slug(key)}.pdf`
-        );
+        const pages: ReturnType<typeof renderGridPdfPage>[] = [];
+        gridsInSet(key).forEach((entry) => {
+            pages.push(renderGridPdfPage(entry.grid, entry.definitions || {}, appearance, { includeLetters: false }));
+            pages.push(renderGridPdfPage(entry.grid, entry.definitions || {}, appearance, { includeLetters: true }));
+        });
+        downloadPdf(pages, `${slug(key)}.pdf`);
     };
 
     const handleImportDatabase = (content: string) => {
@@ -689,8 +697,9 @@
     };
 
     const handleOutsideClick = (event: MouseEvent) => {
-        if (gridAreaEl && !gridAreaEl.contains(event.target as Node)) {
+        if (gridContainerEl && !gridContainerEl.contains(event.target as Node)) {
             selectedCell = null;
+            selectedWord = null;
         }
     };
 
@@ -723,6 +732,8 @@
         onToggleEditMode={toggleEditMode}
         {previewAppearance}
         onTogglePreviewAppearance={() => (previewAppearance = !previewAppearance)}
+        {previewWithoutLetters}
+        onTogglePreviewWithoutLetters={() => (previewWithoutLetters = !previewWithoutLetters)}
         {showSidebar}
         onToggleSidebar={() => (showSidebar = !showSidebar)}
     />
@@ -730,7 +741,7 @@
     <div class="flex flex-1 overflow-hidden">
         <main class="relative flex-1 overflow-auto" bind:this={gridAreaEl}>
             <div class="flex h-fit min-h-full w-fit min-w-full items-center justify-center p-6">
-                <div class="shrink-0" style:width={`${boardW * zoom}px`} style:height={`${boardH * zoom}px`}>
+                <div class="shrink-0" style:width={`${boardW * zoom}px`} style:height={`${boardH * zoom}px`} bind:this={gridContainerEl}>
                     <div style:transform={`scale(${zoom})`} style:transform-origin="top left">
                         <CrosswordGrid
                             cells={currentGrid.cells}
@@ -742,6 +753,7 @@
                             pendingCell={editMode === 'separator' ? sepFirst : null}
                             definitionPlacements={renderData.definitionPlacements}
                             arrowPlacements={renderData.arrowPlacements}
+                            hideLetters={previewWithoutLetters}
                             onCellClick={handleCellClick}
                             onBlackCellClick={handleBlackCellClick}
                         />

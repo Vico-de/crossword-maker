@@ -31,8 +31,10 @@ const pdfBaseFont = (fontFamily: string) =>
 export const renderGridPdfPage = (
     grid: Grid,
     definitions: Record<string, WordDefinitionData>,
-    appearance: AppearanceSettings
+    appearance: AppearanceSettings,
+    options: { includeLetters?: boolean } = {}
 ): PdfPage => {
+    const { includeLetters = true } = options;
     const cellSize = 40;
     const boardWidth = grid.size.width * cellSize;
     const boardHeight = grid.size.height * cellSize;
@@ -99,15 +101,34 @@ export const renderGridPdfPage = (
         return ['BT', `${startX.toFixed(2)} ${baseline.toFixed(2)} Td`, `(${escapePdfText(text)}) Tj`, 'ET'];
     };
 
+    // Structured layers for better PDF editing
+    const layers = {
+        background: [] as string[],
+        grid: [] as string[],
+        definitions: [] as string[],
+        letters: [] as string[],
+        borders: [] as string[],
+        arrows: [] as string[]
+    };
+
     const lines: string[] = [];
 
+    // Layer 1: Background cells
     grid.cells.forEach((row, y) => {
         row.forEach((cell, x) => {
             const left = x * cellSize;
             const topScreen = y * cellSize;
 
-            lines.push(rgbFill(cell.isBlack ? appearance.blackCellColor : appearance.cellBackgroundColor));
-            lines.push(`${left.toFixed(2)} ${py(topScreen + cellSize).toFixed(2)} ${cellSize.toFixed(2)} ${cellSize.toFixed(2)} re f`);
+            layers.background.push(rgbFill(cell.isBlack ? appearance.blackCellColor : appearance.cellBackgroundColor));
+            layers.background.push(`${left.toFixed(2)} ${py(topScreen + cellSize).toFixed(2)} ${cellSize.toFixed(2)} ${cellSize.toFixed(2)} re f`);
+        });
+    });
+
+    // Layer 2: Grid structure (definition backgrounds and separators)
+    grid.cells.forEach((row, y) => {
+        row.forEach((cell, x) => {
+            const left = x * cellSize;
+            const topScreen = y * cellSize;
 
             if (cell.isBlack) {
                 const cellDefs = definitionPlacements[`${x}-${y}`];
@@ -116,8 +137,36 @@ export const renderGridPdfPage = (
                     const segH = cellSize / slots;
                     cellDefs.forEach((def, index) => {
                         const segTopScreen = topScreen + segH * index;
-                        lines.push(rgbFill(def.segmentColor || appearance.blackCellColor));
-                        lines.push(`${left.toFixed(2)} ${py(segTopScreen + segH).toFixed(2)} ${cellSize.toFixed(2)} ${segH.toFixed(2)} re f`);
+                        layers.grid.push(rgbFill(def.segmentColor || appearance.blackCellColor));
+                        layers.grid.push(`${left.toFixed(2)} ${py(segTopScreen + segH).toFixed(2)} ${cellSize.toFixed(2)} ${segH.toFixed(2)} re f`);
+                    });
+
+                    if (slots > 1) {
+                        layers.grid.push(rgbStroke(appearance.separatorColor));
+                        layers.grid.push(`${appearance.separatorWidth.toFixed(2)} w`);
+                        for (let i = 1; i < slots; i += 1) {
+                            const sep = py(topScreen + segH * i);
+                            layers.grid.push(`${left.toFixed(2)} ${sep.toFixed(2)} m ${(left + cellSize).toFixed(2)} ${sep.toFixed(2)} l S`);
+                        }
+                    }
+                }
+            }
+        });
+    });
+
+    // Layer 3: Definitions text
+    grid.cells.forEach((row, y) => {
+        row.forEach((cell, x) => {
+            const left = x * cellSize;
+            const topScreen = y * cellSize;
+
+            if (cell.isBlack) {
+                const cellDefs = definitionPlacements[`${x}-${y}`];
+                if (cellDefs && cellDefs.length > 0 && measureCtx) {
+                    const slots = cellDefs.length;
+                    const segH = cellSize / slots;
+                    cellDefs.forEach((def, index) => {
+                        const segTopScreen = topScreen + segH * index;
 
                         const content = (def.definition || def.word).toUpperCase();
                         const fontSize = def.segmentFontSize || fitDefinitionSize(content, slots);
@@ -136,59 +185,60 @@ export const renderGridPdfPage = (
                         });
                         if (current) textLines.push(current);
 
-                        lines.push(rgbFill(def.segmentTextColor || appearance.definitionTextColor));
-                        lines.push(`/F1 ${fontSize.toFixed(2)} Tf`);
+                        layers.definitions.push(rgbFill(def.segmentTextColor || appearance.definitionTextColor));
+                        layers.definitions.push(`/F1 ${fontSize.toFixed(2)} Tf`);
                         const segCenterScreen = segTopScreen + segH / 2;
                         textLines.forEach((line, lineIndex) => {
                             const lineScreenY = segCenterScreen + (lineIndex - (textLines.length - 1) / 2) * (fontSize * 1.1);
-                            lines.push(...centeredText(line, left + cellSize / 2, py(lineScreenY) - fontSize * 0.35, fontSize));
+                            layers.definitions.push(...centeredText(line, left + cellSize / 2, py(lineScreenY) - fontSize * 0.35, fontSize));
                         });
                     });
-
-                    if (slots > 1) {
-                        lines.push(rgbStroke(appearance.separatorColor));
-                        lines.push(`${appearance.separatorWidth.toFixed(2)} w`);
-                        for (let i = 1; i < slots; i += 1) {
-                            const sep = py(topScreen + segH * i);
-                            lines.push(`${left.toFixed(2)} ${sep.toFixed(2)} m ${(left + cellSize).toFixed(2)} ${sep.toFixed(2)} l S`);
-                        }
-                    }
                 }
-            } else if (cell.value) {
-                const fontSize = cellSize * 0.55;
-                lines.push(rgbFill(appearance.letterColor));
-                lines.push(`/F2 ${fontSize.toFixed(2)} Tf`);
-                lines.push(...centeredText(cell.value, left + cellSize / 2, py(topScreen + cellSize / 2) - fontSize * 0.35, fontSize));
             }
         });
     });
 
-    // Bordures : cadre extérieur + arêtes internes (en sautant celles qui portent
-    // un séparateur pointillé, pour ne pas dessiner un trait plein dessous).
+    // Layer 4: Letters (conditionally included)
+    if (includeLetters) {
+        grid.cells.forEach((row, y) => {
+            row.forEach((cell, x) => {
+                if (!cell.isBlack && cell.value) {
+                    const left = x * cellSize;
+                    const topScreen = y * cellSize;
+                    const fontSize = cellSize * 0.55;
+                    layers.letters.push(rgbFill(appearance.letterColor));
+                    layers.letters.push(`/F2 ${fontSize.toFixed(2)} Tf`);
+                    layers.letters.push(...centeredText(cell.value, left + cellSize / 2, py(topScreen + cellSize / 2) - fontSize * 0.35, fontSize));
+                }
+            });
+        });
+    }
+
+    // Layer 5: Borders (outer frame and inner grid lines)
     const sepSet = new Set(grid.separators || []);
-    lines.push(rgbStroke(appearance.borderColor));
-    lines.push('1 w');
-    lines.push(`0.5 0.5 ${(boardWidth - 1).toFixed(2)} ${(boardHeight - 1).toFixed(2)} re S`);
+    layers.borders.push(rgbStroke(appearance.borderColor));
+    layers.borders.push('1 w');
+    layers.borders.push(`0.5 0.5 ${(boardWidth - 1).toFixed(2)} ${(boardHeight - 1).toFixed(2)} re S`);
     for (let y = 0; y < grid.size.height; y++) {
         for (let x = 0; x < grid.size.width - 1; x++) {
             if (sepSet.has(`${x}-${y}-r`)) continue;
             const px = (x + 1) * cellSize;
-            lines.push(`${px.toFixed(2)} ${py(y * cellSize).toFixed(2)} m ${px.toFixed(2)} ${py((y + 1) * cellSize).toFixed(2)} l S`);
+            layers.borders.push(`${px.toFixed(2)} ${py(y * cellSize).toFixed(2)} m ${px.toFixed(2)} ${py((y + 1) * cellSize).toFixed(2)} l S`);
         }
     }
     for (let x = 0; x < grid.size.width; x++) {
         for (let y = 0; y < grid.size.height - 1; y++) {
             if (sepSet.has(`${x}-${y}-b`)) continue;
             const line = py((y + 1) * cellSize);
-            lines.push(`${(x * cellSize).toFixed(2)} ${line.toFixed(2)} m ${((x + 1) * cellSize).toFixed(2)} ${line.toFixed(2)} l S`);
+            layers.borders.push(`${(x * cellSize).toFixed(2)} ${line.toFixed(2)} m ${((x + 1) * cellSize).toFixed(2)} ${line.toFixed(2)} l S`);
         }
     }
 
-    // Séparateurs pointillés (couleur des bordures).
+    // Dashed separators
     if (sepSet.size > 0) {
-        lines.push(rgbStroke(appearance.borderColor));
-        lines.push('2 w');
-        lines.push('[3 3] 0 d');
+        layers.borders.push(rgbStroke(appearance.borderColor));
+        layers.borders.push('2 w');
+        layers.borders.push('[3 3] 0 d');
         sepSet.forEach((sep) => {
             const m = /^(\d+)-(\d+)-([rb])$/.exec(sep);
             if (!m) return;
@@ -196,26 +246,24 @@ export const renderGridPdfPage = (
             const cy = Number(m[2]);
             if (m[3] === 'r') {
                 const px = (cx + 1) * cellSize;
-                lines.push(`${px.toFixed(2)} ${py(cy * cellSize).toFixed(2)} m ${px.toFixed(2)} ${py((cy + 1) * cellSize).toFixed(2)} l S`);
+                layers.borders.push(`${px.toFixed(2)} ${py(cy * cellSize).toFixed(2)} m ${px.toFixed(2)} ${py((cy + 1) * cellSize).toFixed(2)} l S`);
             } else {
                 const line = py((cy + 1) * cellSize);
-                lines.push(`${(cx * cellSize).toFixed(2)} ${line.toFixed(2)} m ${((cx + 1) * cellSize).toFixed(2)} ${line.toFixed(2)} l S`);
+                layers.borders.push(`${(cx * cellSize).toFixed(2)} ${line.toFixed(2)} m ${((cx + 1) * cellSize).toFixed(2)} ${line.toFixed(2)} l S`);
             }
         });
-        lines.push('[] 0 d');
+        layers.borders.push('[] 0 d');
     }
 
-    // Flèches : petit repère coudé collé au bord de la case noire.
-    lines.push(rgbStroke(appearance.borderColor));
-    lines.push('1.5 w');
+    // Layer 6: Arrows
+    layers.arrows.push(rgbStroke(appearance.borderColor));
+    layers.arrows.push('1.5 w');
     const S = cellSize;
     Object.entries(arrowPlacements).forEach(([key, arrows]) => {
         const [ax, ay] = key.split('-').map(Number);
         const left = ax * cellSize;
         const topScreen = ay * cellSize;
         arrows.forEach((arrow) => {
-            // Bord vertical (gauche/droite) : la flèche part du milieu de son
-            // segment de définition ; bord horizontal : elle reste centrée.
             const vertical = arrow.entry === 'left' || arrow.entry === 'right';
             const shift = vertical && arrow.slotCount > 1 ? ((arrow.slotIndex + 0.5) / arrow.slotCount - 0.5) * S : 0;
             const base =
@@ -241,7 +289,7 @@ export const renderGridPdfPage = (
                   ];
             const toPdf = (pt: number[]) => [left + pt[0], py(topScreen + pt[1])];
             const pdfPts = pts.map(toPdf);
-            lines.push(pdfPts.map(([px, pyy], i) => `${px.toFixed(2)} ${pyy.toFixed(2)} ${i === 0 ? 'm' : 'l'}`).join(' ') + ' S');
+            layers.arrows.push(pdfPts.map(([px, pyy], i) => `${px.toFixed(2)} ${pyy.toFixed(2)} ${i === 0 ? 'm' : 'l'}`).join(' ') + ' S');
 
             const [tx, ty] = pdfPts[pdfPts.length - 1];
             const ah = 0.13 * S;
@@ -253,9 +301,25 @@ export const renderGridPdfPage = (
             const w1y = backY + perp[1] * ah * 0.6;
             const w2x = backX - perp[0] * ah * 0.6;
             const w2y = backY - perp[1] * ah * 0.6;
-            lines.push(`${w1x.toFixed(2)} ${w1y.toFixed(2)} m ${tx.toFixed(2)} ${ty.toFixed(2)} l ${w2x.toFixed(2)} ${w2y.toFixed(2)} l S`);
+            layers.arrows.push(`${w1x.toFixed(2)} ${w1y.toFixed(2)} m ${tx.toFixed(2)} ${ty.toFixed(2)} l ${w2x.toFixed(2)} ${w2y.toFixed(2)} l S`);
         });
     });
+
+    // Combine all layers with markers for better PDF structure
+    lines.push('% Layer: Background');
+    lines.push(...layers.background);
+    lines.push('% Layer: Grid');
+    lines.push(...layers.grid);
+    lines.push('% Layer: Definitions');
+    lines.push(...layers.definitions);
+    lines.push('% Layer: Borders');
+    lines.push(...layers.borders);
+    lines.push('% Layer: Arrows');
+    lines.push(...layers.arrows);
+    if (includeLetters) {
+        lines.push('% Layer: Letters');
+        lines.push(...layers.letters);
+    }
 
     return {
         width: boardWidth,

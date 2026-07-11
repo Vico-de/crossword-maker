@@ -21,6 +21,8 @@
         onToggleEditMode: () => void;
         previewAppearance: boolean;
         onTogglePreviewAppearance: () => void;
+        previewWithoutLetters: boolean;
+        onTogglePreviewWithoutLetters: () => void;
         showSidebar: boolean;
         onToggleSidebar: () => void;
     }
@@ -43,6 +45,8 @@
         onToggleEditMode,
         previewAppearance,
         onTogglePreviewAppearance,
+        previewWithoutLetters,
+        onTogglePreviewWithoutLetters,
         showSidebar,
         onToggleSidebar
     }: Props = $props();
@@ -285,6 +289,16 @@
         >
             <svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" />
+            </svg>
+        </button>
+        <button
+            class="btn btn-sm btn-square {previewWithoutLetters ? 'btn-secondary' : 'btn-ghost'}"
+            onclick={onTogglePreviewWithoutLetters}
+            title="Aperçu sans lettres (comme puzzle vide)"
+            aria-label="Aperçu sans lettres"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <text x="12" y="17" text-anchor="middle" font-size="16" font-weight="bold" stroke-dasharray="2,2" stroke-width="1.5" fill="none">A</text>
             </svg>
         </button>
         <button class="btn btn-sm btn-ghost btn-square" onclick={() => (activePanel = 'appearance')} title="Apparence (export)" aria-label="Apparence">

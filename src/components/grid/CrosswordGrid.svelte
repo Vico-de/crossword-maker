@@ -15,6 +15,7 @@
         pendingCell?: { x: number; y: number } | null;
         definitionPlacements?: Record<string, DefinitionMarker[]>;
         arrowPlacements?: Record<string, ArrowPlacement[]>;
+        hideLetters?: boolean;
         onCellClick: (x: number, y: number) => void;
         onBlackCellClick?: (x: number, y: number) => void;
     }
@@ -29,6 +30,7 @@
         pendingCell,
         definitionPlacements,
         arrowPlacements,
+        hideLetters = false,
         onCellClick,
         onBlackCellClick
     }: Props = $props();
@@ -140,7 +142,7 @@
                     tabindex="-1"
                     onkeydown={() => {}}
                 >
-                    {#if !cell.isBlack}{cell.value}{/if}
+                    {#if !cell.isBlack && !hideLetters}{cell.value}{/if}
 
                     {#if cell.isBlack && definitions && definitions.length > 0}
                         <div class="definition-markers" class:multiple={definitions.length > 1}>
