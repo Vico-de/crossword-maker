@@ -8,8 +8,8 @@
   border-radius: 0;
   /* Bordure extérieure : le haut et la gauche sont dessinés ici, chaque cellule
      dessine sa bordure droite et basse -> lignes de 1px uniformes partout. */
-  border-top: 1px solid var(--grid-border-color, #ccc);
-  border-left: 1px solid var(--grid-border-color, #ccc);
+  border-top: var(--grid-border-width, 1px) solid var(--grid-border-color, #ccc);
+  border-left: var(--grid-border-width, 1px) solid var(--grid-border-color, #ccc);
   display: grid;
   gap: 0;
   width: max-content;
@@ -40,8 +40,8 @@
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   box-sizing: border-box;
   color: var(--grid-letter-color, #000);
-  border-right: 1px solid var(--grid-border-color, #ccc);
-  border-bottom: 1px solid var(--grid-border-color, #ccc);
+  border-right: var(--grid-border-width, 1px) solid var(--grid-border-color, #ccc);
+  border-bottom: var(--grid-border-width, 1px) solid var(--grid-border-color, #ccc);
   line-height: 1;
   flex-shrink: 0;
 }
@@ -85,11 +85,11 @@
 }
 
 .grid-cell.sep-right {
-  border-right: 2px dashed var(--grid-border-color, #ccc);
+  border-right: var(--grid-border-width, 2px) dashed var(--grid-border-color, #ccc);
 }
 
 .grid-cell.sep-bottom {
-  border-bottom: 2px dashed var(--grid-border-color, #ccc);
+  border-bottom: var(--grid-border-width, 2px) dashed var(--grid-border-color, #ccc);
 }
 
 .grid-cell.black {

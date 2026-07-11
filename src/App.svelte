@@ -265,7 +265,8 @@
               ]
         )
             .concat([
-                `--definition-separator-width: ${appearance.separatorWidth}px`,
+                `--definition-separator-width: ${appearance.gridLineWidth}px`,
+                `--grid-border-width: ${appearance.gridLineWidth}px`,
                 `--grid-font-family: ${appearance.gridFont}`,
                 `--grid-font-weight: ${appearance.gridFontWeight}`,
                 `--grid-font-style: ${appearance.gridFontStyle}`,
@@ -563,8 +564,12 @@
     const moveToNextCell = () => (selectedDirection === 'horizontal' ? moveSelection(1, 0) : moveSelection(0, 1));
 
     const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Escape' && selectedCell) {
-            selectedCell = null;
+        if (event.key === 'Escape') {
+            if (selectedCell || selectedWord || selectedBlackCell) {
+                selectedCell = null;
+                selectedWord = null;
+                selectedBlackCell = null;
+            }
             return;
         }
         if (isToolbarInputActive || showGridsDialog || editMode !== 'normal') return;
@@ -730,6 +735,8 @@
         const target = event.target as Node;
         if (gridContainerEl && !gridContainerEl.contains(target) && !sidebarEl?.contains(target)) {
             selectedCell = null;
+            selectedWord = null;
+            selectedBlackCell = null;
         }
     };
 
