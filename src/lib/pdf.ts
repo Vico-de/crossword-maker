@@ -140,7 +140,7 @@ export const renderGridPdfPage = (
     // Le marker {{TEXT:...}} est résolu dans buildPdfDocument avec la vraie police PDF.
     const centeredText = (text: string, centerX: number, baseline: number, size: number, _family?: string, _weight?: string, _style?: string) => {
         const encoded = btoa(unescape(encodeURIComponent(text)));
-        return ['BT', `{{TEXT:centerX=${centerX.toFixed(4)}|baseline=${baseline.toFixed(4)}|size=${size.toFixed(4)}|text=${encoded}}} Tj`, 'ET'];
+        return ['BT', `{{TEXT:centerX=${centerX.toFixed(4)}|baseline=${baseline.toFixed(4)}|size=${size.toFixed(4)}|text=${encoded}}}`, 'ET'];
     };
 
     // Structured layers for better PDF editing
