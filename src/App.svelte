@@ -265,8 +265,9 @@
               ]
         )
             .concat([
-                `--definition-separator-width: ${appearance.gridLineWidth}px`,
+                `--definition-separator-width: ${appearance.definitionSeparatorWidth}px`,
                 `--grid-border-width: ${appearance.gridLineWidth}px`,
+                `--dashed-separator-width: ${appearance.dashedSeparatorWidth}px`,
                 `--grid-font-family: ${appearance.gridFont}`,
                 `--grid-font-weight: ${appearance.gridFontWeight}`,
                 `--grid-font-style: ${appearance.gridFontStyle}`,

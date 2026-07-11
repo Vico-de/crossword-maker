@@ -85,11 +85,11 @@
 }
 
 .grid-cell.sep-right {
-  border-right: var(--grid-border-width, 2px) dashed var(--grid-border-color, #ccc);
+  border-right: var(--dashed-separator-width, 2px) dashed var(--grid-border-color, #ccc);
 }
 
 .grid-cell.sep-bottom {
-  border-bottom: var(--grid-border-width, 2px) dashed var(--grid-border-color, #ccc);
+  border-bottom: var(--dashed-separator-width, 2px) dashed var(--grid-border-color, #ccc);
 }
 
 .grid-cell.black {
