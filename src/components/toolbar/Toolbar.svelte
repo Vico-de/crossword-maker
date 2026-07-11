@@ -418,15 +418,15 @@
                 {/each}
 
                 <label class="flex items-center justify-between gap-2 text-sm">
-                    <span>Épaisseur séparateurs</span>
+                    <span>Épaisseur de la grille</span>
                     <input
                         type="number"
                         class="input input-xs w-24"
-                        min={0.25}
+                        min={0.5}
                         max={3}
                         step={0.25}
-                        value={appearance.separatorWidth}
-                        oninput={(e) => onAppearanceChange({ separatorWidth: Math.max(0.25, Math.min(3, Number(e.currentTarget.value) || 0.25)) })}
+                        value={appearance.gridLineWidth}
+                        oninput={(e) => onAppearanceChange({ gridLineWidth: Math.max(0.5, Math.min(3, Number(e.currentTarget.value) || 1)) })}
                         onfocus={() => onInputFocus(true)}
                         onblur={() => onInputFocus(false)}
                     />

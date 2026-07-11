@@ -79,7 +79,7 @@ export interface AppearanceSettings {
     definitionTextColor: string;
     borderColor: string;
     separatorColor: string;
-    separatorWidth: number;
+    gridLineWidth: number;
     gridFont: string;
     gridFontWeight: 'normal' | 'bold';
     gridFontStyle: 'normal' | 'italic';

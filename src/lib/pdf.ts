@@ -137,10 +137,10 @@ export const renderGridPdfPage = (
         return `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG`;
     };
     // Texte centré horizontalement sur centerX, ligne de base à baseline.
-    const centeredText = (text: string, centerX: number, baseline: number, size: number, family?: string, weight?: string, style?: string) => {
-        const startX = centerX - textWidth(text, size, family, weight, style) / 2;
+    // Le marker {{TEXT:...}} est résolu dans buildPdfDocument avec la vraie police PDF.
+    const centeredText = (text: string, centerX: number, baseline: number, size: number, _family?: string, _weight?: string, _style?: string) => {
         const encoded = btoa(unescape(encodeURIComponent(text)));
-        return ['BT', `${startX.toFixed(2)} ${baseline.toFixed(2)} Td`, `{{TEXT:${encoded}}} Tj`, 'ET'];
+        return ['BT', `{{TEXT:centerX=${centerX.toFixed(4)}|baseline=${baseline.toFixed(4)}|size=${size.toFixed(4)}|text=${encoded}}} Tj`, 'ET'];
     };
 
     // Structured layers for better PDF editing
@@ -188,7 +188,7 @@ export const renderGridPdfPage = (
 
                     if (slots > 1) {
                         layers.grid.push(rgbStroke(appearance.separatorColor));
-                        layers.grid.push(`${appearance.separatorWidth.toFixed(2)} w`);
+                        layers.grid.push(`${appearance.gridLineWidth.toFixed(2)} w`);
                         for (let i = 1; i < slots; i += 1) {
                             const sep = py(topScreen + segH * i);
                             layers.grid.push(`${left.toFixed(2)} ${sep.toFixed(2)} m ${(left + cellSize).toFixed(2)} ${sep.toFixed(2)} l S`);
@@ -272,7 +272,7 @@ export const renderGridPdfPage = (
     // Layer 5: Borders (outer frame and inner grid lines)
     const sepSet = new Set(grid.separators || []);
     layers.borders.push(rgbStroke(appearance.borderColor));
-    layers.borders.push('1 w');
+    layers.borders.push(`${appearance.gridLineWidth.toFixed(2)} w`);
     layers.borders.push(`0.5 0.5 ${(boardWidth - 1).toFixed(2)} ${(boardHeight - 1).toFixed(2)} re S`);
     for (let y = 0; y < grid.size.height; y++) {
         for (let x = 0; x < grid.size.width - 1; x++) {
@@ -292,7 +292,7 @@ export const renderGridPdfPage = (
     // Dashed separators
     if (sepSet.size > 0) {
         layers.borders.push(rgbStroke(appearance.borderColor));
-        layers.borders.push('2 w');
+        layers.borders.push(`${appearance.gridLineWidth.toFixed(2)} w`);
         layers.borders.push('[3 3] 0 d');
         sepSet.forEach((sep) => {
             const m = /^(\d+)-(\d+)-([rb])$/.exec(sep);
@@ -312,7 +312,9 @@ export const renderGridPdfPage = (
 
     // Layer 6: Arrows
     layers.arrows.push(rgbStroke(appearance.borderColor));
-    layers.arrows.push('1.5 w');
+    layers.arrows.push(`${(0.04 * S).toFixed(2)} w`);
+    layers.arrows.push('1 j');
+    layers.arrows.push('1 J');
     const S = cellSize;
     Object.entries(arrowPlacements).forEach(([key, arrows]) => {
         const [ax, ay] = key.split('-').map(Number);
@@ -359,6 +361,8 @@ export const renderGridPdfPage = (
             layers.arrows.push(`${w1x.toFixed(2)} ${w1y.toFixed(2)} m ${tx.toFixed(2)} ${ty.toFixed(2)} l ${w2x.toFixed(2)} ${w2y.toFixed(2)} l S`);
         });
     });
+    layers.arrows.push('0 j');
+    layers.arrows.push('0 J');
 
     return {
         width: boardWidth,
@@ -464,10 +468,16 @@ const buildPdfDocument = async (pages: PdfPage[]) => {
     );
 
     const decodeTextMarkers = (content: string, font: PDFFont) =>
-        content.replace(/\{\{TEXT:([^}]+)\}\}/g, (_match, encoded: string) => {
-            const text = decodeURIComponent(escape(atob(encoded)));
-            return font.encodeText(text).toString();
-        });
+        content.replace(/\{\{TEXT:centerX=([0-9.]+)\|baseline=([0-9.]+)\|size=([0-9.]+)\|text=([^}]+)\}\}/g,
+            (_match, cx: string, baseline: string, size: string, encoded: string) => {
+                const text = decodeURIComponent(escape(atob(encoded)));
+                const fontSize = Number(size);
+                const centerX = Number(cx);
+                const textWidth = font.widthOfTextAtSize(text, fontSize);
+                const startX = centerX - textWidth / 2;
+                return `${startX.toFixed(2)} ${baseline} Td ${font.encodeText(text).toString()} Tj`;
+            }
+        );
 
     for (const source of pages) {
         const page = document.addPage([source.width, source.height]);
