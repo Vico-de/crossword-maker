@@ -268,6 +268,10 @@
                 `--definition-separator-width: ${appearance.separatorWidth}px`,
                 `--grid-font-family: ${appearance.gridFont}`,
                 `--definition-font-family: ${appearance.definitionFont}`,
+                `--grid-font-weight: ${appearance.gridFontStyle === 'bold' || appearance.gridFontStyle === 'bold-italic' ? 700 : 400}`,
+                `--grid-font-style: ${appearance.gridFontStyle === 'italic' || appearance.gridFontStyle === 'bold-italic' ? 'italic' : 'normal'}`,
+                `--definition-font-weight: ${appearance.definitionFontStyle === 'bold' || appearance.definitionFontStyle === 'bold-italic' ? 700 : 400}`,
+                `--definition-font-style: ${appearance.definitionFontStyle === 'italic' || appearance.definitionFontStyle === 'bold-italic' ? 'italic' : 'normal'}`,
                 `--ui-font-family: ${appearance.gridFont}`
             ])
             .join(';')
@@ -555,9 +559,15 @@
     const moveToPreviousCell = () => (selectedDirection === 'horizontal' ? moveSelection(-1, 0) : moveSelection(0, -1));
     const moveToNextCell = () => (selectedDirection === 'horizontal' ? moveSelection(1, 0) : moveSelection(0, 1));
 
+    const clearCellSelection = () => {
+        selectedCell = null;
+        selectedWord = null;
+        selectedBlackCell = null;
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Escape' && selectedCell) {
-            selectedCell = null;
+        if (event.key === 'Escape') {
+            clearCellSelection();
             return;
         }
         if (isToolbarInputActive || showGridsDialog || editMode !== 'normal') return;
@@ -722,7 +732,7 @@
     const handleOutsideClick = (event: MouseEvent) => {
         const target = event.target as Node;
         if (gridContainerEl && !gridContainerEl.contains(target) && !sidebarEl?.contains(target)) {
-            selectedCell = null;
+            clearCellSelection();
         }
     };
 
@@ -811,7 +821,7 @@
                     onUpdatePlacement={updatePlacement}
                     onRemovePlacement={removePlacement}
                     onCloseBlackCell={() => (selectedBlackCell = null)}
-                    onClearSelection={() => (selectedCell = null)}
+                    onClearSelection={clearCellSelection}
                 />
             </aside>
         {/if}

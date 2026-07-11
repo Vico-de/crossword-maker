@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { Cell } from '../../models/types';
-    import type { ArrowPlacement, DefinitionMarker } from '../../lib/crossword';
+    import { fitDefinitionFontSize, type ArrowPlacement, type DefinitionMarker } from '../../lib/crossword';
     import './CrosswordGrid.css';
 
     const BASE_CELL_SIZE = 40;
@@ -34,47 +34,6 @@
         onCellClick,
         onBlackCellClick
     }: Props = $props();
-
-    const computeFitFontSize = (text: string, slotCount: number) => {
-        const availableWidth = BASE_CELL_SIZE - 6;
-        const availableHeight = (BASE_CELL_SIZE - 6) / Math.max(1, slotCount) - 2;
-        const words = text.split(/\s+/).filter(Boolean);
-        const longestWord = words.reduce((max, w) => Math.max(max, w.length), 0);
-
-        const maxHeightSize = availableHeight / Math.max(1, words.length) / 1.35;
-        const maxWidthSize = longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18;
-        const slotPenalty = slotCount > 1 ? 0.86 : 1;
-        const upperBound = Math.min(14, maxHeightSize, maxWidthSize) * slotPenalty;
-
-        for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
-            const charWidth = 0.52 * size;
-            let currentLineWidth = 0;
-            let linesUsed = 1;
-            let fits = true;
-
-            for (const word of words) {
-                const wordWidth = word.length * charWidth;
-                if (wordWidth > availableWidth) {
-                    fits = false;
-                    break;
-                }
-                if (currentLineWidth === 0) currentLineWidth = wordWidth;
-                else if (currentLineWidth + charWidth + wordWidth <= availableWidth) currentLineWidth += charWidth + wordWidth;
-                else {
-                    linesUsed += 1;
-                    if (linesUsed * size * 1.1 > availableHeight) {
-                        fits = false;
-                        break;
-                    }
-                    currentLineWidth = wordWidth;
-                }
-            }
-
-            if (fits) return size;
-        }
-
-        return 4;
-    };
 
     // Petit repère coudé près du bord d'entrée, sans recouvrir la lettre (repère 0..100, y vers le bas).
     const arrowGeom = (entry: ArrowPlacement['entry'], bodyDir: ArrowPlacement['bodyDir'], slotIndex = 0, slotCount = 1) => {
@@ -154,7 +113,7 @@
                                 >
                                     <span
                                         class="definition-text"
-                                        style:--fit-size={`${definition.segmentFontSize || computeFitFontSize(markerText, slotCount)}px`}
+                                        style:--fit-size={`${definition.segmentFontSize || fitDefinitionFontSize(markerText, slotCount)}px`}
                                         style:color={definition.segmentTextColor}
                                     >
                                         {markerText}

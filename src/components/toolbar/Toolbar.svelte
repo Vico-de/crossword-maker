@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { themeChange } from 'theme-change';
-    import type { AppearanceSettings, Grid } from '../../models/types';
+    import type { AppearanceSettings, FontStyle, Grid } from '../../models/types';
 
     interface Props {
         onResize: (width: number, height: number) => void;
@@ -132,6 +132,12 @@
         { label: 'Montserrat', value: "'Montserrat', 'Segoe UI', system-ui, sans-serif" },
         { label: 'Georgia', value: "Georgia, 'Times New Roman', serif" },
         { label: 'Courier New', value: "'Courier New', monospace" }
+    ];
+    const fontStyleOptions: { label: string; value: FontStyle }[] = [
+        { label: 'Normal', value: 'normal' },
+        { label: 'Gras', value: 'bold' },
+        { label: 'Italique', value: 'italic' },
+        { label: 'Gras italique', value: 'bold-italic' }
     ];
 
     const normalizeHex = (value: string): string | null => {
@@ -439,6 +445,16 @@
                             <option value={option.value}>{option.label}</option>
                         {/each}
                     </select>
+                    <select
+                        class="select select-sm w-full"
+                        aria-label="Style de la police de la grille"
+                        value={appearance.gridFontStyle || 'bold'}
+                        onchange={(e) => onAppearanceChange({ gridFontStyle: e.currentTarget.value as FontStyle })}
+                    >
+                        {#each fontStyleOptions as option (option.value)}
+                            <option value={option.value}>{option.label}</option>
+                        {/each}
+                    </select>
                     {#if selectedFontValue(appearance.gridFont) === 'custom'}
                         <div class="join">
                             <input
@@ -469,6 +485,16 @@
                         onblur={() => onInputFocus(false)}
                     >
                         {#each fontOptions as option (option.value)}
+                            <option value={option.value}>{option.label}</option>
+                        {/each}
+                    </select>
+                    <select
+                        class="select select-sm w-full"
+                        aria-label="Style de la police des définitions"
+                        value={appearance.definitionFontStyle || 'normal'}
+                        onchange={(e) => onAppearanceChange({ definitionFontStyle: e.currentTarget.value as FontStyle })}
+                    >
+                        {#each fontStyleOptions as option (option.value)}
                             <option value={option.value}>{option.label}</option>
                         {/each}
                     </select>

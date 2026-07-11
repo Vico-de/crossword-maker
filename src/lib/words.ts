@@ -31,6 +31,44 @@ export interface ArrowPlacement {
     slotCount: number;
 }
 
+// Calcul partagé par l'aperçu et le PDF afin que les définitions gardent la
+// même taille et les mêmes retours à la ligne dans les deux rendus.
+export const fitDefinitionFontSize = (text: string, slotCount: number) => {
+    const availableWidth = 34;
+    const availableHeight = 34 / Math.max(1, slotCount) - 2;
+    const words = text.split(/\s+/).filter(Boolean);
+    const longestWord = words.reduce((max, word) => Math.max(max, word.length), 0);
+    const maxHeightSize = availableHeight / Math.max(1, words.length) / 1.35;
+    const maxWidthSize = longestWord > 0 ? availableWidth / (longestWord * 0.65) : 18;
+    const upperBound = Math.min(14, maxHeightSize, maxWidthSize) * (slotCount > 1 ? 0.86 : 1);
+
+    for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
+        const charWidth = 0.52 * size;
+        let currentLineWidth = 0;
+        let linesUsed = 1;
+        let fits = true;
+        for (const word of words) {
+            const wordWidth = word.length * charWidth;
+            if (wordWidth > availableWidth) {
+                fits = false;
+                break;
+            }
+            if (currentLineWidth === 0) currentLineWidth = wordWidth;
+            else if (currentLineWidth + charWidth + wordWidth <= availableWidth) currentLineWidth += charWidth + wordWidth;
+            else {
+                linesUsed += 1;
+                if (linesUsed * size * 1.1 > availableHeight) {
+                    fits = false;
+                    break;
+                }
+                currentLineWidth = wordWidth;
+            }
+        }
+        if (fits) return size;
+    }
+    return 4;
+};
+
 // Parcourt la grille pour lister les mots existants avec leurs coordonnées.
 export const extractWordPositions = (cells: Cell[][]): WordPosition[] => {
     const positions: WordPosition[] = [];
@@ -132,7 +170,9 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
     separatorColor: '#ffffff',
     separatorWidth: 0.5,
     gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
-    definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
+    definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
+    gridFontStyle: 'bold',
+    definitionFontStyle: 'normal'
 };
 
 // Compare deux ensembles d'apparence pour éviter des boucles de mise à jour.
@@ -147,6 +187,8 @@ export const areAppearancesEqual = (a: AppearanceSettings, b: AppearanceSettings
     a.separatorWidth === b.separatorWidth &&
     a.gridFont === b.gridFont &&
     a.definitionFont === b.definitionFont &&
+    a.gridFontStyle === b.gridFontStyle &&
+    a.definitionFontStyle === b.definitionFontStyle &&
     a.backgroundImage === b.backgroundImage;
 
 // Prépare la carte des définitions/flèches à afficher dans la grille courante.
