@@ -1,9 +1,13 @@
 // Génération de PDF vectoriel (texte éditable, polices standard) sans dépendance.
 import type { AppearanceSettings, Grid, WordDefinitionData } from '../models/types';
 import { buildPlacementsForGrid } from './words';
-
-const escapePdfText = (text: string) =>
-    text.replace(/[\\()]/g, (char) => (char === '\\' ? '\\\\' : char === '(' ? '\\(' : '\\)'));
+import fontkit from '@pdf-lib/fontkit';
+import { PDFDocument, PDFHexString, PDFName, StandardFonts, type PDFFont, type PDFRef } from 'pdf-lib';
+import interUrl from '@fontsource/inter/files/inter-latin-400-normal.woff?url';
+import robotoUrl from '@fontsource/roboto/files/roboto-latin-400-normal.woff?url';
+import latoUrl from '@fontsource/lato/files/lato-latin-400-normal.woff?url';
+import openSansUrl from '@fontsource/open-sans/files/open-sans-latin-400-normal.woff?url';
+import montserratUrl from '@fontsource/montserrat/files/montserrat-latin-400-normal.woff?url';
 
 const hexToRgb = (hex: string): [number, number, number] => {
     const normalized = hex.replace('#', '');
@@ -18,7 +22,16 @@ const hexToRgb = (hex: string): [number, number, number] => {
     return [((intVal >> 16) & 255) / 255, ((intVal >> 8) & 255) / 255, (intVal & 255) / 255];
 };
 
-type PdfPage = { width: number; height: number; content: string; font: string; font2: string };
+type LayerName = 'Background' | 'Grid' | 'Letters' | 'Definitions' | 'Borders' | 'Arrows';
+type PdfPage = {
+    width: number;
+    height: number;
+    layers: Record<LayerName, string[]>;
+    definitionFont: string;
+    gridFont: string;
+    definitionFontData?: string;
+    gridFontData?: string;
+};
 
 // Choisit l'une des polices standard PDF (toujours éditables) selon la famille.
 const pdfBaseFont = (fontFamily: string) =>
@@ -44,9 +57,9 @@ export const renderGridPdfPage = (
 
     // Écran (origine haut-gauche) -> PDF (origine bas-gauche) : le texte reste à l'endroit.
     const py = (screenY: number) => boardHeight - screenY;
-    const textWidth = (text: string, size: number) => {
+    const textWidth = (text: string, size: number, family = appearance.definitionFont) => {
         if (!measureCtx) return text.length * size * 0.5;
-        measureCtx.font = `${size}px ${appearance.definitionFont}`;
+        measureCtx.font = `${size}px ${family}`;
         return measureCtx.measureText(text).width;
     };
 
@@ -96,9 +109,10 @@ export const renderGridPdfPage = (
         return `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG`;
     };
     // Texte centré horizontalement sur centerX, ligne de base à baseline.
-    const centeredText = (text: string, centerX: number, baseline: number, size: number) => {
-        const startX = centerX - textWidth(text, size) / 2;
-        return ['BT', `${startX.toFixed(2)} ${baseline.toFixed(2)} Td`, `(${escapePdfText(text)}) Tj`, 'ET'];
+    const centeredText = (text: string, centerX: number, baseline: number, size: number, family?: string) => {
+        const startX = centerX - textWidth(text, size, family) / 2;
+        const encoded = btoa(unescape(encodeURIComponent(text)));
+        return ['BT', `${startX.toFixed(2)} ${baseline.toFixed(2)} Td`, `{{TEXT:${encoded}}} Tj`, 'ET'];
     };
 
     // Structured layers for better PDF editing
@@ -110,8 +124,6 @@ export const renderGridPdfPage = (
         borders: [] as string[],
         arrows: [] as string[]
     };
-
-    const lines: string[] = [];
 
     // Layer 1: Background cells
     grid.cells.forEach((row, y) => {
@@ -208,7 +220,15 @@ export const renderGridPdfPage = (
                     const fontSize = cellSize * 0.55;
                     layers.letters.push(rgbFill(appearance.letterColor));
                     layers.letters.push(`/F2 ${fontSize.toFixed(2)} Tf`);
-                    layers.letters.push(...centeredText(cell.value, left + cellSize / 2, py(topScreen + cellSize / 2) - fontSize * 0.35, fontSize));
+                    layers.letters.push(
+                        ...centeredText(
+                            cell.value,
+                            left + cellSize / 2,
+                            py(topScreen + cellSize / 2) - fontSize * 0.35,
+                            fontSize,
+                            appearance.gridFont
+                        )
+                    );
                 }
             });
         });
@@ -305,114 +325,108 @@ export const renderGridPdfPage = (
         });
     });
 
-    // Combine all layers with markers for better PDF structure
-    lines.push('% Layer: Background');
-    lines.push(...layers.background);
-    lines.push('% Layer: Grid');
-    lines.push(...layers.grid);
-    lines.push('% Layer: Definitions');
-    lines.push(...layers.definitions);
-    lines.push('% Layer: Borders');
-    lines.push(...layers.borders);
-    lines.push('% Layer: Arrows');
-    lines.push(...layers.arrows);
-    if (includeLetters) {
-        lines.push('% Layer: Letters');
-        lines.push(...layers.letters);
-    }
-
     return {
         width: boardWidth,
         height: boardHeight,
-        content: lines.join('\n'),
-        font: pdfBaseFont(appearance.definitionFont),
-        font2: pdfBaseFont(appearance.gridFont)
+        layers: {
+            Background: layers.background,
+            Grid: layers.grid,
+            Letters: includeLetters ? layers.letters : [],
+            Definitions: layers.definitions,
+            Borders: layers.borders,
+            Arrows: layers.arrows
+        },
+        definitionFont: appearance.definitionFont,
+        gridFont: appearance.gridFont,
+        definitionFontData: appearance.definitionFontData,
+        gridFontData: appearance.gridFontData
     };
 };
 
-const buildPdfDocument = (pages: PdfPage[]) => {
-    const encoder = new TextEncoder();
-    const chunks: (string | Uint8Array)[] = ['%PDF-1.4\n'];
-    const offsets: Record<number, number> = {};
-    const byteLength = () =>
-        chunks.reduce((total, chunk) => total + (typeof chunk === 'string' ? encoder.encode(chunk).length : chunk.length), 0);
+const dataUrlBytes = (dataUrl: string) => {
+    const encoded = dataUrl.split(',')[1] || '';
+    return Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0));
+};
 
-    const writeObject = (id: number, content: string) => {
-        offsets[id] = byteLength();
-        chunks.push(`${id} 0 obj\n${content}\nendobj\n`);
+const standardFont = (family: string) => {
+    const base = pdfBaseFont(family);
+    return base === 'Courier' ? StandardFonts.Courier : base === 'Times-Roman' ? StandardFonts.TimesRoman : StandardFonts.Helvetica;
+};
+
+const bundledFontUrl = (family: string) =>
+    /montserrat/i.test(family)
+        ? montserratUrl
+        : /open sans/i.test(family)
+          ? openSansUrl
+          : /roboto/i.test(family)
+            ? robotoUrl
+            : /lato/i.test(family)
+              ? latoUrl
+              : /inter/i.test(family)
+                ? interUrl
+                : undefined;
+
+const buildPdfDocument = async (pages: PdfPage[]) => {
+    const document = await PDFDocument.create();
+    document.registerFontkit(fontkit);
+    const first = pages[0];
+    const embed = async (family: string, data?: string) => {
+        if (data) return document.embedFont(dataUrlBytes(data), { subset: true });
+        const url = bundledFontUrl(family);
+        if (url) return document.embedFont(await fetch(url).then((response) => response.arrayBuffer()), { subset: true });
+        return document.embedFont(standardFont(family));
     };
+    const definitionFont = await embed(first?.definitionFont || 'Helvetica', first?.definitionFontData);
+    const gridFont = await embed(first?.gridFont || 'Helvetica', first?.gridFontData);
 
-    const writeStream = (id: number, dict: string, data: Uint8Array) => {
-        offsets[id] = byteLength();
-        chunks.push(`${id} 0 obj\n${dict}\nstream\n`);
-        chunks.push(data);
-        chunks.push('\nendstream\nendobj\n');
-    };
-
-    const catalogId = 1;
-    const pagesId = 2;
-    const fontId = 3;
-    const fontId2 = 4;
-    let nextId = 5;
-
-    const preparedPages = pages.map((page) => ({ ...page, pageId: nextId++, contentId: nextId++ }));
-
-    writeObject(fontId, `<< /Type /Font /Subtype /Type1 /BaseFont /${pages[0]?.font || 'Helvetica'} >>`);
-    writeObject(fontId2, `<< /Type /Font /Subtype /Type1 /BaseFont /${pages[0]?.font2 || 'Helvetica'} >>`);
-
-    preparedPages.forEach((page) => {
-        const contentBytes = encoder.encode(page.content);
-        writeStream(page.contentId, `<< /Length ${contentBytes.length} >>`, contentBytes);
-
-        const resources = ['/ProcSet [ /PDF /Text ]', `/Font << /F1 ${fontId} 0 R /F2 ${fontId2} 0 R >>`];
-        const pageDict = [
-            '<<',
-            '/Type /Page',
-            `/Parent ${pagesId} 0 R`,
-            `/Resources << ${resources.join(' ')} >>`,
-            `/MediaBox [0 0 ${page.width} ${page.height}]`,
-            `/Contents ${page.contentId} 0 R`,
-            '>>'
-        ].join(' ');
-
-        writeObject(page.pageId, pageDict);
-    });
-
-    writeObject(
-        pagesId,
-        `<< /Type /Pages /Count ${preparedPages.length} /Kids [${preparedPages.map((page) => `${page.pageId} 0 R`).join(' ')}] >>`
-    );
-    writeObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
-
-    const xrefStart = byteLength();
-    chunks.push(`xref\n0 ${nextId}\n`);
-    chunks.push('0000000000 65535 f \n');
-    for (let i = 1; i < nextId; i++) {
-        const offset = offsets[i] ?? 0;
-        chunks.push(`${offset.toString().padStart(10, '0')} 00000 n \n`);
+    const layerNames: LayerName[] = ['Grid', 'Letters', 'Definitions', 'Background', 'Borders', 'Arrows'];
+    const layerRefs = new Map<LayerName, PDFRef>();
+    for (const name of layerNames) {
+        layerRefs.set(name, document.context.register(document.context.obj({ Type: 'OCG', Name: PDFHexString.fromText(name) })));
     }
-    chunks.push(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+    const refs = layerNames.map((name) => layerRefs.get(name)!);
+    document.catalog.set(
+        PDFName.of('OCProperties'),
+        document.context.obj({ OCGs: refs, D: { Name: PDFHexString.fromText('Crossword layers'), Order: refs, ON: refs } })
+    );
 
-    const total = byteLength();
-    const buffer = new Uint8Array(total);
-    let cursor = 0;
-    chunks.forEach((chunk) => {
-        if (typeof chunk === 'string') {
-            const encoded = encoder.encode(chunk);
-            buffer.set(encoded, cursor);
-            cursor += encoded.length;
-        } else {
-            buffer.set(chunk, cursor);
-            cursor += chunk.length;
-        }
-    });
+    const decodeTextMarkers = (content: string, font: PDFFont) =>
+        content.replace(/\{\{TEXT:([^}]+)\}\}/g, (_match, encoded: string) => {
+            const text = decodeURIComponent(escape(atob(encoded)));
+            return font.encodeText(text).toString();
+        });
 
-    return new Blob([buffer], { type: 'application/pdf' });
+    for (const source of pages) {
+        const page = document.addPage([source.width, source.height]);
+        const properties: Record<string, PDFRef> = {};
+        const paintOrder: LayerName[] = ['Background', 'Grid', 'Definitions', 'Letters', 'Borders', 'Arrows'];
+        const content = paintOrder
+            .map((name, index) => {
+                const propertyName = `Layer${index + 1}`;
+                properties[propertyName] = layerRefs.get(name)!;
+                let body = source.layers[name].join('\n');
+                body = decodeTextMarkers(body, name === 'Letters' ? gridFont : definitionFont);
+                return `/OC /${propertyName} BDC\n${body}\nEMC`;
+            })
+            .join('\n');
+        const streamRef = document.context.register(document.context.flateStream(content));
+        page.node.set(PDFName.of('Contents'), streamRef);
+        page.node.set(
+            PDFName.of('Resources'),
+            document.context.obj({
+                ProcSet: ['PDF', 'Text'],
+                Font: { F1: definitionFont.ref, F2: gridFont.ref },
+                Properties: properties
+            })
+        );
+    }
+
+    return new Blob([await document.save()], { type: 'application/pdf' });
 };
 
 // Génère le PDF à partir des pages et déclenche son téléchargement.
-export const downloadPdf = (pages: PdfPage[], filename: string) => {
-    const blob = buildPdfDocument(pages);
+export const downloadPdf = async (pages: PdfPage[], filename: string) => {
+    const blob = await buildPdfDocument(pages);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
