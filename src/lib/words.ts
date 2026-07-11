@@ -131,6 +131,8 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
     borderColor: '#cccccc',
     separatorColor: '#ffffff',
     gridLineWidth: 1,
+    dashedSeparatorWidth: 1,
+    definitionSeparatorWidth: 1,
     gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
     gridFontWeight: 'normal',
     gridFontStyle: 'normal',
@@ -149,6 +151,8 @@ export const areAppearancesEqual = (a: AppearanceSettings, b: AppearanceSettings
     a.borderColor === b.borderColor &&
     a.separatorColor === b.separatorColor &&
     a.gridLineWidth === b.gridLineWidth &&
+    a.dashedSeparatorWidth === b.dashedSeparatorWidth &&
+    a.definitionSeparatorWidth === b.definitionSeparatorWidth &&
     a.gridFont === b.gridFont &&
     a.gridFontWeight === b.gridFontWeight &&
     a.gridFontStyle === b.gridFontStyle &&

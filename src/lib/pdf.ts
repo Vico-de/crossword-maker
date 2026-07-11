@@ -239,7 +239,7 @@ export const renderGridPdfPage = (
 
                     if (slots > 1) {
                         layers.grid.push(rgbStroke(appearance.separatorColor));
-                        layers.grid.push(`${appearance.gridLineWidth.toFixed(2)} w`);
+                        layers.grid.push(`${appearance.definitionSeparatorWidth.toFixed(2)} w`);
                         for (let i = 1; i < slots; i += 1) {
                             const sep = py(topScreen + segH * i);
                             layers.grid.push(`${left.toFixed(2)} ${sep.toFixed(2)} m ${(left + cellSize).toFixed(2)} ${sep.toFixed(2)} l S`);
@@ -339,7 +339,7 @@ export const renderGridPdfPage = (
 
     if (sepSet.size > 0) {
         layers.borders.push(rgbStroke(appearance.borderColor));
-        layers.borders.push(`${appearance.gridLineWidth.toFixed(2)} w`);
+        layers.borders.push(`${appearance.dashedSeparatorWidth.toFixed(2)} w`);
         layers.borders.push('[3 3] 0 d');
         sepSet.forEach((sep) => {
             const m = /^(\d+)-(\d+)-([rb])$/.exec(sep);
@@ -395,9 +395,9 @@ export const renderGridPdfPage = (
             const pdfPts = pts.map(toPdf);
             layers.arrows.push(pdfPts.map(([px, pyy], i) => `${px.toFixed(2)} ${pyy.toFixed(2)} ${i === 0 ? 'm' : 'l'}`).join(' ') + ' S');
 
-            // Arrowhead
+            // Arrowhead — ah=7 in web's 0-100 viewBox = 0.07 * cellSize.
             const [tx, ty] = pdfPts[pdfPts.length - 1];
-            const ah = 0.13 * S;
+            const ah = 0.07 * S;
             const pdfBd = [bd[0], -bd[1]];
             const perp = [-pdfBd[1], pdfBd[0]];
             const backX = tx - pdfBd[0] * ah;

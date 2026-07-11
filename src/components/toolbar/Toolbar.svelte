@@ -432,6 +432,36 @@
                     />
                 </label>
 
+                <label class="flex items-center justify-between gap-2 text-sm">
+                    <span>Épaisseur séparateur pointillé</span>
+                    <input
+                        type="number"
+                        class="input input-xs w-24"
+                        min={0.5}
+                        max={3}
+                        step={0.25}
+                        value={appearance.dashedSeparatorWidth}
+                        oninput={(e) => onAppearanceChange({ dashedSeparatorWidth: Math.max(0.5, Math.min(3, Number(e.currentTarget.value) || 1)) })}
+                        onfocus={() => onInputFocus(true)}
+                        onblur={() => onInputFocus(false)}
+                    />
+                </label>
+
+                <label class="flex items-center justify-between gap-2 text-sm">
+                    <span>Épaisseur séparation définition</span>
+                    <input
+                        type="number"
+                        class="input input-xs w-24"
+                        min={0.5}
+                        max={3}
+                        step={0.25}
+                        value={appearance.definitionSeparatorWidth}
+                        oninput={(e) => onAppearanceChange({ definitionSeparatorWidth: Math.max(0.5, Math.min(3, Number(e.currentTarget.value) || 1)) })}
+                        onfocus={() => onInputFocus(true)}
+                        onblur={() => onInputFocus(false)}
+                    />
+                </label>
+
                 <label class="flex flex-col gap-1 text-sm">
                     <span>Police de la grille</span>
                     <select
