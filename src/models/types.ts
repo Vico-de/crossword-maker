@@ -81,7 +81,11 @@ export interface AppearanceSettings {
     separatorColor: string;
     separatorWidth: number;
     gridFont: string;
+    gridFontWeight: 'normal' | 'bold';
+    gridFontStyle: 'normal' | 'italic';
     definitionFont: string;
+    definitionFontWeight: 'normal' | 'bold';
+    definitionFontStyle: 'normal' | 'italic';
     // Data URLs des polices chargées par l'utilisateur. Elles sont conservées
     // avec les réglages afin de pouvoir être incorporées à l'export PDF.
     gridFontData?: string;
