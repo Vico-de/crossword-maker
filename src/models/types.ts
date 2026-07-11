@@ -80,6 +80,8 @@ export interface AppearanceSettings {
     borderColor: string;
     separatorColor: string;
     gridLineWidth: number;
+    dashedSeparatorWidth: number;
+    definitionSeparatorWidth: number;
     gridFont: string;
     gridFontWeight: 'normal' | 'bold';
     gridFontStyle: 'normal' | 'italic';
