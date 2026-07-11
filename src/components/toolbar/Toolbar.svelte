@@ -166,7 +166,8 @@
         normalizeHex(colorDrafts[key]) ?? normalizeHex(appearance[key]) ?? '#000000';
 
     const applyFontChange = (key: 'gridFont' | 'definitionFont', value: string) => {
-        onAppearanceChange({ [key]: value.trim() || appearance[key] });
+        const dataKey = key === 'gridFont' ? 'gridFontData' : 'definitionFontData';
+        onAppearanceChange({ [key]: value.trim() || appearance[key], [dataKey]: undefined });
     };
 
     const selectedFontValue = (current: string) => {
@@ -183,12 +184,18 @@
             document.fonts.add(fontFace);
 
             const fontValue = `'${fontName}'`;
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result));
+                reader.onerror = () => reject(reader.error);
+                reader.readAsDataURL(file);
+            });
             if (target === 'grid') {
                 gridFontCustom = fontValue;
-                applyFontChange('gridFont', fontValue);
+                onAppearanceChange({ gridFont: fontValue, gridFontData: dataUrl });
             } else {
                 definitionFontCustom = fontValue;
-                applyFontChange('definitionFont', fontValue);
+                onAppearanceChange({ definitionFont: fontValue, definitionFontData: dataUrl });
             }
         } catch (error) {
             console.error('Erreur lors du chargement de la police :', error);

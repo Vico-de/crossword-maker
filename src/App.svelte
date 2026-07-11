@@ -72,6 +72,7 @@
 
     let gridAreaEl = $state<HTMLElement | null>(null);
     let gridContainerEl = $state<HTMLElement | null>(null);
+    let sidebarEl = $state<HTMLElement | null>(null);
     let dbFileInput = $state<HTMLInputElement | null>(null);
 
     // Apparence : utilisée uniquement pour l'export PDF (toujours en clair).
@@ -302,6 +303,24 @@
 
     $effect(() => {
         localStorage.setItem('appearance', JSON.stringify(appearance));
+    });
+
+    // Recharge les polices personnalisées persistées lors d'une nouvelle session.
+    $effect(() => {
+        const loadPersistedFont = async (family: string, data?: string) => {
+            if (!data) return;
+            const name = family.replace(/^['"]|['"]$/g, '');
+            if (document.fonts.check(`12px "${name}"`)) return;
+            try {
+                const face = new FontFace(name, `url(${data})`);
+                await face.load();
+                document.fonts.add(face);
+            } catch (error) {
+                console.error('Impossible de recharger la police personnalisée', error);
+            }
+        };
+        void loadPersistedFont(appearance.gridFont, appearance.gridFontData);
+        void loadPersistedFont(appearance.definitionFont, appearance.definitionFontData);
     });
 
     // Purge les placements dont le mot ou l'ancrage a disparu (le pool est conservé).
@@ -537,6 +556,10 @@
     const moveToNextCell = () => (selectedDirection === 'horizontal' ? moveSelection(1, 0) : moveSelection(0, 1));
 
     const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape' && selectedCell) {
+            selectedCell = null;
+            return;
+        }
         if (isToolbarInputActive || showGridsDialog || editMode !== 'normal') return;
         if (!selectedCell) return;
         const { x, y } = selectedCell;
@@ -697,9 +720,9 @@
     };
 
     const handleOutsideClick = (event: MouseEvent) => {
-        if (gridContainerEl && !gridContainerEl.contains(event.target as Node)) {
+        const target = event.target as Node;
+        if (gridContainerEl && !gridContainerEl.contains(target) && !sidebarEl?.contains(target)) {
             selectedCell = null;
-            selectedWord = null;
         }
     };
 
@@ -769,26 +792,28 @@
         </main>
 
         {#if showSidebar}
-            <Sidebar
-                {selectedBlackCell}
-                {selectedBlackCellDefinitions}
-                {appearance}
-                {wordsList}
-                {filteredWordsList}
-                {duplicateWords}
-                {defPool}
-                {placements}
-                {selectedWord}
-                candidateCount={candidateInfos.length}
-                bind:wordSearch
-                onFocusInput={(v) => (isToolbarInputActive = v)}
-                onWordSelect={handleWordSelect}
-                onDefinitionChange={handleDefinitionChange}
-                onUpdatePlacement={updatePlacement}
-                onRemovePlacement={removePlacement}
-                onCloseBlackCell={() => (selectedBlackCell = null)}
-                onClearSelection={() => (selectedCell = null)}
-            />
+            <aside bind:this={sidebarEl} class="contents">
+                <Sidebar
+                    {selectedBlackCell}
+                    {selectedBlackCellDefinitions}
+                    {appearance}
+                    {wordsList}
+                    {filteredWordsList}
+                    {duplicateWords}
+                    {defPool}
+                    {placements}
+                    {selectedWord}
+                    candidateCount={candidateInfos.length}
+                    bind:wordSearch
+                    onFocusInput={(v) => (isToolbarInputActive = v)}
+                    onWordSelect={handleWordSelect}
+                    onDefinitionChange={handleDefinitionChange}
+                    onUpdatePlacement={updatePlacement}
+                    onRemovePlacement={removePlacement}
+                    onCloseBlackCell={() => (selectedBlackCell = null)}
+                    onClearSelection={() => (selectedCell = null)}
+                />
+            </aside>
         {/if}
     </div>
 

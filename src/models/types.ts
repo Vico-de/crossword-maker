@@ -82,5 +82,9 @@ export interface AppearanceSettings {
     separatorWidth: number;
     gridFont: string;
     definitionFont: string;
+    // Data URLs des polices chargées par l'utilisateur. Elles sont conservées
+    // avec les réglages afin de pouvoir être incorporées à l'export PDF.
+    gridFontData?: string;
+    definitionFontData?: string;
     backgroundImage?: string;
 }
