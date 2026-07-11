@@ -3,11 +3,27 @@ import type { AppearanceSettings, Grid, WordDefinitionData } from '../models/typ
 import { buildPlacementsForGrid } from './words';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFHexString, PDFName, StandardFonts, type PDFFont, type PDFRef } from 'pdf-lib';
-import interUrl from '@fontsource/inter/files/inter-latin-400-normal.woff?url';
-import robotoUrl from '@fontsource/roboto/files/roboto-latin-400-normal.woff?url';
-import latoUrl from '@fontsource/lato/files/lato-latin-400-normal.woff?url';
-import openSansUrl from '@fontsource/open-sans/files/open-sans-latin-400-normal.woff?url';
-import montserratUrl from '@fontsource/montserrat/files/montserrat-latin-400-normal.woff?url';
+
+import interNormal from '@fontsource/inter/files/inter-latin-400-normal.woff?url';
+import interBold from '@fontsource/inter/files/inter-latin-700-normal.woff?url';
+import interItalic from '@fontsource/inter/files/inter-latin-400-italic.woff?url';
+import interBoldItalic from '@fontsource/inter/files/inter-latin-700-italic.woff?url';
+import robotoNormal from '@fontsource/roboto/files/roboto-latin-400-normal.woff?url';
+import robotoBold from '@fontsource/roboto/files/roboto-latin-700-normal.woff?url';
+import robotoItalic from '@fontsource/roboto/files/roboto-latin-400-italic.woff?url';
+import robotoBoldItalic from '@fontsource/roboto/files/roboto-latin-700-italic.woff?url';
+import latoNormal from '@fontsource/lato/files/lato-latin-400-normal.woff?url';
+import latoBold from '@fontsource/lato/files/lato-latin-700-normal.woff?url';
+import latoItalic from '@fontsource/lato/files/lato-latin-400-italic.woff?url';
+import latoBoldItalic from '@fontsource/lato/files/lato-latin-700-italic.woff?url';
+import openSansNormal from '@fontsource/open-sans/files/open-sans-latin-400-normal.woff?url';
+import openSansBold from '@fontsource/open-sans/files/open-sans-latin-700-normal.woff?url';
+import openSansItalic from '@fontsource/open-sans/files/open-sans-latin-400-italic.woff?url';
+import openSansBoldItalic from '@fontsource/open-sans/files/open-sans-latin-700-italic.woff?url';
+import montserratNormal from '@fontsource/montserrat/files/montserrat-latin-400-normal.woff?url';
+import montserratBold from '@fontsource/montserrat/files/montserrat-latin-700-normal.woff?url';
+import montserratItalic from '@fontsource/montserrat/files/montserrat-latin-400-italic.woff?url';
+import montserratBoldItalic from '@fontsource/montserrat/files/montserrat-latin-700-italic.woff?url';
 
 const hexToRgb = (hex: string): [number, number, number] => {
     const normalized = hex.replace('#', '');
@@ -28,7 +44,11 @@ type PdfPage = {
     height: number;
     layers: Record<LayerName, string[]>;
     definitionFont: string;
+    definitionFontWeight: 'normal' | 'bold';
+    definitionFontStyle: 'normal' | 'italic';
     gridFont: string;
+    gridFontWeight: 'normal' | 'bold';
+    gridFontStyle: 'normal' | 'italic';
     definitionFontData?: string;
     gridFontData?: string;
 };
@@ -55,11 +75,16 @@ export const renderGridPdfPage = (
     const { definitionPlacements, arrowPlacements } = buildPlacementsForGrid(grid, definitions);
     const measureCtx = document.createElement('canvas').getContext('2d');
 
+    const cssWeight = (w: 'normal' | 'bold') => (w === 'bold' ? 'bold' : 'normal');
+    const cssStyle = (s: 'normal' | 'italic') => (s === 'italic' ? 'italic' : 'normal');
+    const measureFont = (size: number, family: string, weight: string, style: string) =>
+        `${style} ${weight} ${size}px ${family}`;
+
     // Écran (origine haut-gauche) -> PDF (origine bas-gauche) : le texte reste à l'endroit.
     const py = (screenY: number) => boardHeight - screenY;
-    const textWidth = (text: string, size: number, family = appearance.definitionFont) => {
+    const textWidth = (text: string, size: number, family = appearance.definitionFont, weight = 'normal', style = 'normal') => {
         if (!measureCtx) return text.length * size * 0.5;
-        measureCtx.font = `${size}px ${family}`;
+        measureCtx.font = measureFont(size, family, weight, style);
         return measureCtx.measureText(text).width;
     };
 
@@ -72,8 +97,11 @@ export const renderGridPdfPage = (
         const slotPenalty = slotCount > 1 ? 0.86 : 1;
         const upperBound = Math.min(14, availableHeight, longestWord > 0 ? availableWidth / (longestWord * 0.65) : 14) * slotPenalty;
 
+        const defWeight = cssWeight(appearance.definitionFontWeight);
+        const defStyle = cssStyle(appearance.definitionFontStyle);
+
         for (let size = Math.floor(upperBound); size >= 4; size -= 1) {
-            measureCtx.font = `${size}px ${appearance.definitionFont}`;
+            measureCtx.font = measureFont(size, appearance.definitionFont, defWeight, defStyle);
             const spaceWidth = measureCtx.measureText(' ').width;
             let lineCount = 1;
             let width = 0;
@@ -109,8 +137,8 @@ export const renderGridPdfPage = (
         return `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG`;
     };
     // Texte centré horizontalement sur centerX, ligne de base à baseline.
-    const centeredText = (text: string, centerX: number, baseline: number, size: number, family?: string) => {
-        const startX = centerX - textWidth(text, size, family) / 2;
+    const centeredText = (text: string, centerX: number, baseline: number, size: number, family?: string, weight?: string, style?: string) => {
+        const startX = centerX - textWidth(text, size, family, weight, style) / 2;
         const encoded = btoa(unescape(encodeURIComponent(text)));
         return ['BT', `${startX.toFixed(2)} ${baseline.toFixed(2)} Td`, `{{TEXT:${encoded}}} Tj`, 'ET'];
     };
@@ -124,6 +152,11 @@ export const renderGridPdfPage = (
         borders: [] as string[],
         arrows: [] as string[]
     };
+
+    const defWeight = cssWeight(appearance.definitionFontWeight);
+    const defStyle = cssStyle(appearance.definitionFontStyle);
+    const gridWeight = cssWeight(appearance.gridFontWeight);
+    const gridStyle = cssStyle(appearance.gridFontStyle);
 
     // Layer 1: Background cells
     grid.cells.forEach((row, y) => {
@@ -186,7 +219,7 @@ export const renderGridPdfPage = (
                         const availableWidth = cellSize - 6;
                         const textLines: string[] = [];
                         let current = '';
-                        measureCtx.font = `${fontSize}px ${appearance.definitionFont}`;
+                        measureCtx.font = measureFont(fontSize, appearance.definitionFont, defWeight, defStyle);
                         words.forEach((word) => {
                             const tentative = current ? `${current} ${word}` : word;
                             if (measureCtx.measureText(tentative).width <= availableWidth) current = tentative;
@@ -202,7 +235,7 @@ export const renderGridPdfPage = (
                         const segCenterScreen = segTopScreen + segH / 2;
                         textLines.forEach((line, lineIndex) => {
                             const lineScreenY = segCenterScreen + (lineIndex - (textLines.length - 1) / 2) * (fontSize * 1.1);
-                            layers.definitions.push(...centeredText(line, left + cellSize / 2, py(lineScreenY) - fontSize * 0.35, fontSize));
+                            layers.definitions.push(...centeredText(line, left + cellSize / 2, py(lineScreenY) - fontSize * 0.35, fontSize, appearance.definitionFont, defWeight, defStyle));
                         });
                     });
                 }
@@ -226,7 +259,9 @@ export const renderGridPdfPage = (
                             left + cellSize / 2,
                             py(topScreen + cellSize / 2) - fontSize * 0.35,
                             fontSize,
-                            appearance.gridFont
+                            appearance.gridFont,
+                            gridWeight,
+                            gridStyle
                         )
                     );
                 }
@@ -337,7 +372,11 @@ export const renderGridPdfPage = (
             Arrows: layers.arrows
         },
         definitionFont: appearance.definitionFont,
+        definitionFontWeight: appearance.definitionFontWeight,
+        definitionFontStyle: appearance.definitionFontStyle,
         gridFont: appearance.gridFont,
+        gridFontWeight: appearance.gridFontWeight,
+        gridFontStyle: appearance.gridFontStyle,
         definitionFontData: appearance.definitionFontData,
         gridFontData: appearance.gridFontData
     };
@@ -353,31 +392,65 @@ const standardFont = (family: string) => {
     return base === 'Courier' ? StandardFonts.Courier : base === 'Times-Roman' ? StandardFonts.TimesRoman : StandardFonts.Helvetica;
 };
 
-const bundledFontUrl = (family: string) =>
-    /montserrat/i.test(family)
-        ? montserratUrl
-        : /open sans/i.test(family)
-          ? openSansUrl
-          : /roboto/i.test(family)
-            ? robotoUrl
-            : /lato/i.test(family)
-              ? latoUrl
-              : /inter/i.test(family)
-                ? interUrl
-                : undefined;
+const bundledFontUrl = (family: string, weight: 'normal' | 'bold', style: 'normal' | 'italic') => {
+    const bold = weight === 'bold';
+    const italic = style === 'italic';
+
+    if (/montserrat/i.test(family)) return bold ? (italic ? montserratBoldItalic : montserratBold) : (italic ? montserratItalic : montserratNormal);
+    if (/open sans/i.test(family)) return bold ? (italic ? openSansBoldItalic : openSansBold) : (italic ? openSansItalic : openSansNormal);
+    if (/roboto/i.test(family)) return bold ? (italic ? robotoBoldItalic : robotoBold) : (italic ? robotoItalic : robotoNormal);
+    if (/lato/i.test(family)) return bold ? (italic ? latoBoldItalic : latoBold) : (italic ? latoItalic : latoNormal);
+    if (/inter/i.test(family)) return bold ? (italic ? interBoldItalic : interBold) : (italic ? interItalic : interNormal);
+    return undefined;
+};
+
+const standardFontWithVariant = (family: string, weight: 'normal' | 'bold', style: 'normal' | 'italic') => {
+    const base = pdfBaseFont(family);
+    const bold = weight === 'bold';
+    const italic = style === 'italic';
+
+    if (base === 'Courier') {
+        if (bold && italic) return StandardFonts.CourierBoldOblique;
+        if (bold) return StandardFonts.CourierBold;
+        if (italic) return StandardFonts.CourierOblique;
+        return StandardFonts.Courier;
+    }
+    if (base === 'Times-Roman') {
+        if (bold && italic) return StandardFonts.TimesRomanBoldItalic;
+        if (bold) return StandardFonts.TimesRomanBold;
+        if (italic) return StandardFonts.TimesRomanItalic;
+        return StandardFonts.TimesRoman;
+    }
+    if (bold && italic) return StandardFonts.HelveticaBoldOblique;
+    if (bold) return StandardFonts.HelveticaBold;
+    if (italic) return StandardFonts.HelveticaOblique;
+    return StandardFonts.Helvetica;
+};
 
 const buildPdfDocument = async (pages: PdfPage[]) => {
     const document = await PDFDocument.create();
     document.registerFontkit(fontkit);
     const first = pages[0];
-    const embed = async (family: string, data?: string) => {
+
+    const embed = async (family: string, weight: 'normal' | 'bold', style: 'normal' | 'italic', data?: string) => {
         if (data) return document.embedFont(dataUrlBytes(data), { subset: true });
-        const url = bundledFontUrl(family);
+        const url = bundledFontUrl(family, weight, style);
         if (url) return document.embedFont(await fetch(url).then((response) => response.arrayBuffer()), { subset: true });
-        return document.embedFont(standardFont(family));
+        return document.embedFont(standardFontWithVariant(family, weight, style));
     };
-    const definitionFont = await embed(first?.definitionFont || 'Helvetica', first?.definitionFontData);
-    const gridFont = await embed(first?.gridFont || 'Helvetica', first?.gridFontData);
+
+    const definitionFont = await embed(
+        first?.definitionFont || 'Helvetica',
+        first?.definitionFontWeight || 'normal',
+        first?.definitionFontStyle || 'normal',
+        first?.definitionFontData
+    );
+    const gridFont = await embed(
+        first?.gridFont || 'Helvetica',
+        first?.gridFontWeight || 'normal',
+        first?.gridFontStyle || 'normal',
+        first?.gridFontData
+    );
 
     const layerNames: LayerName[] = ['Grid', 'Letters', 'Definitions', 'Background', 'Borders', 'Arrows'];
     const layerRefs = new Map<LayerName, PDFRef>();

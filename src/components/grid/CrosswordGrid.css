@@ -31,7 +31,8 @@
   justify-content: center;
   position: relative;
   font-size: 20px;
-  font-weight: bold;
+  font-weight: var(--grid-font-weight, bold);
+  font-style: var(--grid-font-style, normal);
   font-family: var(--grid-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif);
   user-select: none;
   cursor: pointer;
@@ -111,6 +112,8 @@
   gap: 0;
   position: relative;
   font-family: var(--definition-font-family, var(--grid-font-family, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif));
+  font-weight: var(--definition-font-weight, normal);
+  font-style: var(--definition-font-style, normal);
   color: var(--grid-definition-color, #f5f5f5);
 }
 

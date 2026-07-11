@@ -132,7 +132,11 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
     separatorColor: '#ffffff',
     separatorWidth: 0.5,
     gridFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
-    definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
+    gridFontWeight: 'normal',
+    gridFontStyle: 'normal',
+    definitionFont: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
+    definitionFontWeight: 'normal',
+    definitionFontStyle: 'normal'
 };
 
 // Compare deux ensembles d'apparence pour éviter des boucles de mise à jour.
@@ -146,7 +150,11 @@ export const areAppearancesEqual = (a: AppearanceSettings, b: AppearanceSettings
     a.separatorColor === b.separatorColor &&
     a.separatorWidth === b.separatorWidth &&
     a.gridFont === b.gridFont &&
+    a.gridFontWeight === b.gridFontWeight &&
+    a.gridFontStyle === b.gridFontStyle &&
     a.definitionFont === b.definitionFont &&
+    a.definitionFontWeight === b.definitionFontWeight &&
+    a.definitionFontStyle === b.definitionFontStyle &&
     a.backgroundImage === b.backgroundImage;
 
 // Prépare la carte des définitions/flèches à afficher dans la grille courante.

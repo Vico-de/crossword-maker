@@ -267,7 +267,11 @@
             .concat([
                 `--definition-separator-width: ${appearance.separatorWidth}px`,
                 `--grid-font-family: ${appearance.gridFont}`,
+                `--grid-font-weight: ${appearance.gridFontWeight}`,
+                `--grid-font-style: ${appearance.gridFontStyle}`,
                 `--definition-font-family: ${appearance.definitionFont}`,
+                `--definition-font-weight: ${appearance.definitionFontWeight}`,
+                `--definition-font-style: ${appearance.definitionFontStyle}`,
                 `--ui-font-family: ${appearance.gridFont}`
             ])
             .join(';')
@@ -307,20 +311,23 @@
 
     // Recharge les polices personnalisées persistées lors d'une nouvelle session.
     $effect(() => {
-        const loadPersistedFont = async (family: string, data?: string) => {
+        const loadPersistedFont = async (family: string, data?: string, weight?: string, style?: string) => {
             if (!data) return;
             const name = family.replace(/^['"]|['"]$/g, '');
             if (document.fonts.check(`12px "${name}"`)) return;
             try {
-                const face = new FontFace(name, `url(${data})`);
+                const descriptor: FontFaceDescriptors = {};
+                if (weight && weight !== 'normal') descriptor.weight = weight;
+                if (style && style !== 'normal') descriptor.style = style;
+                const face = new FontFace(name, `url(${data})`, descriptor);
                 await face.load();
                 document.fonts.add(face);
             } catch (error) {
                 console.error('Impossible de recharger la police personnalisée', error);
             }
         };
-        void loadPersistedFont(appearance.gridFont, appearance.gridFontData);
-        void loadPersistedFont(appearance.definitionFont, appearance.definitionFontData);
+        void loadPersistedFont(appearance.gridFont, appearance.gridFontData, appearance.gridFontWeight, appearance.gridFontStyle);
+        void loadPersistedFont(appearance.definitionFont, appearance.definitionFontData, appearance.definitionFontWeight, appearance.definitionFontStyle);
     });
 
     // Purge les placements dont le mot ou l'ancrage a disparu (le pool est conservé).

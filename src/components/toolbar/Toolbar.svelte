@@ -66,7 +66,11 @@
         height: currentGrid?.size.height || 15
     });
     let gridFontCustom = $state(appearance.gridFont);
+    let gridFontWeight = $state<'normal' | 'bold'>(appearance.gridFontWeight);
+    let gridFontStyle = $state<'normal' | 'italic'>(appearance.gridFontStyle);
     let definitionFontCustom = $state(appearance.definitionFont);
+    let definitionFontWeight = $state<'normal' | 'bold'>(appearance.definitionFontWeight);
+    let definitionFontStyle = $state<'normal' | 'italic'>(appearance.definitionFontStyle);
     let colorDrafts = $state<Record<ColorKey, string>>({
         blackCellColor: appearance.blackCellColor,
         cellBackgroundColor: appearance.cellBackgroundColor,
@@ -105,7 +109,11 @@
             separatorColor: appearance.separatorColor
         };
         gridFontCustom = appearance.gridFont;
+        gridFontWeight = appearance.gridFontWeight;
+        gridFontStyle = appearance.gridFontStyle;
         definitionFontCustom = appearance.definitionFont;
+        definitionFontWeight = appearance.definitionFontWeight;
+        definitionFontStyle = appearance.definitionFontStyle;
     });
 
     const handleResize = () => {
@@ -167,7 +175,9 @@
 
     const applyFontChange = (key: 'gridFont' | 'definitionFont', value: string) => {
         const dataKey = key === 'gridFont' ? 'gridFontData' : 'definitionFontData';
-        onAppearanceChange({ [key]: value.trim() || appearance[key], [dataKey]: undefined });
+        const weightKey = key === 'gridFont' ? 'gridFontWeight' : 'definitionFontWeight';
+        const styleKey = key === 'gridFont' ? 'gridFontStyle' : 'definitionFontStyle';
+        onAppearanceChange({ [key]: value.trim() || appearance[key], [dataKey]: undefined, [weightKey]: 'normal', [styleKey]: 'normal' });
     };
 
     const selectedFontValue = (current: string) => {
@@ -192,10 +202,10 @@
             });
             if (target === 'grid') {
                 gridFontCustom = fontValue;
-                onAppearanceChange({ gridFont: fontValue, gridFontData: dataUrl });
+                onAppearanceChange({ gridFont: fontValue, gridFontData: dataUrl, gridFontWeight: 'normal', gridFontStyle: 'normal' });
             } else {
                 definitionFontCustom = fontValue;
-                onAppearanceChange({ definitionFont: fontValue, definitionFontData: dataUrl });
+                onAppearanceChange({ definitionFont: fontValue, definitionFontData: dataUrl, definitionFontWeight: 'normal', definitionFontStyle: 'normal' });
             }
         } catch (error) {
             console.error('Erreur lors du chargement de la police :', error);
@@ -439,20 +449,34 @@
                             <option value={option.value}>{option.label}</option>
                         {/each}
                     </select>
-                    {#if selectedFontValue(appearance.gridFont) === 'custom'}
-                        <div class="join">
+                    <div class="flex items-center gap-1">
+                        <button
+                            type="button"
+                            class="btn btn-xs {gridFontWeight === 'bold' ? 'btn-primary' : 'btn-ghost'}"
+                            onclick={() => { gridFontWeight = gridFontWeight === 'bold' ? 'normal' : 'bold'; onAppearanceChange({ gridFontWeight }); }}
+                            title="Gras (Bold)"
+                            aria-label="Gras"
+                        ><b>B</b></button>
+                        <button
+                            type="button"
+                            class="btn btn-xs {gridFontStyle === 'italic' ? 'btn-primary' : 'btn-ghost'}"
+                            onclick={() => { gridFontStyle = gridFontStyle === 'italic' ? 'normal' : 'italic'; onAppearanceChange({ gridFontStyle }); }}
+                            title="Italique (Italic)"
+                            aria-label="Italique"
+                        ><i>I</i></button>
+                        {#if selectedFontValue(appearance.gridFont) === 'custom'}
                             <input
                                 type="text"
-                                class="input input-xs join-item grow"
+                                class="input input-xs grow"
                                 bind:value={gridFontCustom}
                                 oninput={(e) => applyFontChange('gridFont', e.currentTarget.value)}
                                 onfocus={() => onInputFocus(true)}
                                 onblur={() => onInputFocus(false)}
                                 placeholder="Ex: Inter, Arial"
                             />
-                            <button type="button" class="btn btn-xs join-item" onclick={() => triggerFontUpload('grid')}>Charger</button>
-                        </div>
-                    {/if}
+                            <button type="button" class="btn btn-xs" onclick={() => triggerFontUpload('grid')}>Charger</button>
+                        {/if}
+                    </div>
                 </label>
 
                 <label class="flex flex-col gap-1 text-sm">
@@ -472,20 +496,34 @@
                             <option value={option.value}>{option.label}</option>
                         {/each}
                     </select>
-                    {#if selectedFontValue(appearance.definitionFont) === 'custom'}
-                        <div class="join">
+                    <div class="flex items-center gap-1">
+                        <button
+                            type="button"
+                            class="btn btn-xs {definitionFontWeight === 'bold' ? 'btn-primary' : 'btn-ghost'}"
+                            onclick={() => { definitionFontWeight = definitionFontWeight === 'bold' ? 'normal' : 'bold'; onAppearanceChange({ definitionFontWeight }); }}
+                            title="Gras (Bold)"
+                            aria-label="Gras"
+                        ><b>B</b></button>
+                        <button
+                            type="button"
+                            class="btn btn-xs {definitionFontStyle === 'italic' ? 'btn-primary' : 'btn-ghost'}"
+                            onclick={() => { definitionFontStyle = definitionFontStyle === 'italic' ? 'normal' : 'italic'; onAppearanceChange({ definitionFontStyle }); }}
+                            title="Italique (Italic)"
+                            aria-label="Italique"
+                        ><i>I</i></button>
+                        {#if selectedFontValue(appearance.definitionFont) === 'custom'}
                             <input
                                 type="text"
-                                class="input input-xs join-item grow"
+                                class="input input-xs grow"
                                 bind:value={definitionFontCustom}
                                 oninput={(e) => applyFontChange('definitionFont', e.currentTarget.value)}
                                 onfocus={() => onInputFocus(true)}
                                 onblur={() => onInputFocus(false)}
                                 placeholder="Ex: Inter, Georgia"
                             />
-                            <button type="button" class="btn btn-xs join-item" onclick={() => triggerFontUpload('definition')}>Charger</button>
-                        </div>
-                    {/if}
+                            <button type="button" class="btn btn-xs" onclick={() => triggerFontUpload('definition')}>Charger</button>
+                        {/if}
+                    </div>
                 </label>
             </div>
         </div>
